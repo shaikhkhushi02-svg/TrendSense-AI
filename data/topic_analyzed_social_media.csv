@@ -1,0 +1,16 @@
+post_id,text,date,likes,shares,clean_text,topic_id,topic_label,topic_confidence,engagement
+1,AI is changing the way we work! #AI #Technology,2026-08-01,120,35,ai changing way work ai technology,2,"ChatGPT, Coding & Education",0.9155669946433428,155
+2,ChatGPT is making coding so much easier! #ChatGPT #AI,2026-08-02,250,70,chatgpt making coding much easier chatgpt ai,3,"AI, Jobs & Future Technology",0.931960717675989,320
+3,I hate how AI is taking away jobs. #AI #Jobs,2026-08-03,90,20,hate ai taking away job ai job,3,"AI, Jobs & Future Technology",0.9329252245368043,110
+4,Machine learning is absolutely amazing! #MachineLearning #AI,2026-08-04,310,95,machine learning absolutely amazing machinelearning ai,1,AI Automation & Productivity,0.9303020909093909,405
+5,This new AI update is terrible and disappointing. #AI,2026-08-05,75,18,new ai update terrible disappointing ai,2,"ChatGPT, Coding & Education",0.9162717013746173,93
+6,Generative AI is the future of technology! #GenAI #Future,2026-08-06,420,130,generative ai future technology genai future,1,AI Automation & Productivity,0.9313793284554573,550
+7,Why is everyone talking about ChatGPT today? #ChatGPT,2026-08-07,380,110,everyone talking chatgpt today chatgpt,1,AI Automation & Productivity,0.9138756484643735,490
+8,AI tools are helping students learn faster. #Education #AI,2026-08-08,210,55,ai tool helping student learn faster education ai,1,AI Automation & Productivity,0.9439842313058991,265
+9,This AI product is useless and frustrating. #AI #Tech,2026-08-09,65,12,ai product useless frustrating ai tech,3,"AI, Jobs & Future Technology",0.9160832769097133,77
+10,Data science and AI careers are growing rapidly! #DataScience #AI,2026-08-10,340,100,data science ai career growing rapidly datascience ai,1,AI Automation & Productivity,0.9439842310409138,440
+11,I am worried about the risks of artificial intelligence. #AI #Future,2026-08-11,180,45,worried risk artificial intelligence ai future,1,AI Automation & Productivity,0.9324357564875356,225
+12,The new machine learning model performs incredibly well! #ML,2026-08-12,290,80,new machine learning model performs incredibly well ml,2,"ChatGPT, Coding & Education",0.9515370685362722,370
+13,AI automation can save companies a lot of time. #Automation #AI,2026-08-13,230,60,ai automation save company lot time automation ai,3,"AI, Jobs & Future Technology",0.9440969218208732,290
+14,Another disappointing AI launch. Expected much better. #AI,2026-08-14,100,25,another disappointing ai launch expected much better ai,2,"ChatGPT, Coding & Education",0.9162358514566997,125
+15,The future of AI looks exciting and promising! #AI #Future,2026-08-15,450,150,future ai look exciting promising ai future,3,"AI, Jobs & Future Technology",0.9313239285948975,600
