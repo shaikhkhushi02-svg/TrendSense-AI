@@ -69,3 +69,4 @@ def extract_hashtags(text):
     hashtags = re.findall(r"#\w+", str(text))
 
     return [tag.lower() for tag in hashtags]
+

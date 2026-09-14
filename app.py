@@ -1,8 +1,13 @@
 import os
 import io
 import re
+import json
 import html
+import urllib.parse
+import urllib.request
+import urllib.error
 import warnings
+import datetime
 import joblib
 import numpy as np
 import pandas as pd
@@ -10,17 +15,6 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
-
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    fbeta_score,
-    confusion_matrix,
-    classification_report,
-)
 
 warnings.filterwarnings("ignore")
 
@@ -42,315 +36,32 @@ st.set_page_config(
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
-DATA_PATH = os.path.join(
-    BASE_DIR, "data", "social_media.csv"
-)
+DATA_PATH = os.path.join(DATA_DIR, "social_media.csv")
 
 SENTIMENT_MODEL_PATH = os.path.join(
     BASE_DIR, "sentiment_model.pkl"
 )
 
-SENTIMENT_VECTOR_PATH = os.path.join(
+TFIDF_PATH = os.path.join(
     BASE_DIR, "tfidf_vectorizer.pkl"
-)
-
-EMOTION_MODEL_PATH = os.path.join(
-    BASE_DIR, "emotion_model.pkl"
-)
-
-EMOTION_VECTOR_PATH = os.path.join(
-    BASE_DIR, "emotion_vectorizer.pkl"
 )
 
 TOPIC_MODEL_PATH = os.path.join(
     BASE_DIR, "topic_model.pkl"
 )
 
-TOPIC_VECTOR_PATH = os.path.join(
+TOPIC_VECTORIZER_PATH = os.path.join(
     BASE_DIR, "topic_vectorizer.pkl"
 )
 
-SENTIMENT_TEST_PATH = os.path.join(
-    BASE_DIR, "data", "sentiment_test.csv"
+EMOTION_MODEL_PATH = os.path.join(
+    BASE_DIR, "emotion_model.pkl"
 )
 
-EMOTION_TEST_PATH = os.path.join(
-    BASE_DIR, "data", "emotion_test.csv"
-)
-
-
-# ============================================================
-# HTML HELPER
-# ============================================================
-
-def render_html(content):
-    try:
-        st.html(content)
-    except Exception:
-        st.markdown(
-            content,
-            unsafe_allow_html=True
-        )
-
-
-# ============================================================
-# PREMIUM LIGHT UI
-# ============================================================
-
-render_html("""
-<style>
-
-.stApp {
-    background: #f5f7fb;
-    color: #172033;
-}
-
-.main .block-container {
-    max-width: 1500px;
-    padding-top: 1.5rem;
-    padding-bottom: 3rem;
-}
-
-
-/* SIDEBAR */
-
-section[data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e5e7eb;
-}
-
-section[data-testid="stSidebar"] * {
-    color: #344054;
-}
-
-
-/* HERO */
-
-.hero {
-    padding: 35px;
-    border-radius: 25px;
-    background:
-        linear-gradient(
-            135deg,
-            #ffffff 0%,
-            #f5f0ff 50%,
-            #edf5ff 100%
-        );
-    border: 1px solid #e5e7eb;
-    margin-bottom: 25px;
-    box-shadow:
-        0 10px 35px
-        rgba(79, 70, 229, 0.08);
-}
-
-.hero-title {
-    font-size: 47px;
-    font-weight: 850;
-    letter-spacing: -2px;
-    color: #17132b;
-}
-
-.hero-gradient {
-    background:
-        linear-gradient(
-            90deg,
-            #6d28d9,
-            #2563eb
-        );
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.hero-sub {
-    color: #667085;
-    font-size: 16px;
-    line-height: 1.7;
-    margin-top: 10px;
-    max-width: 950px;
-}
-
-.source-pill {
-    display: inline-block;
-    margin-top: 18px;
-    padding: 8px 15px;
-    border-radius: 999px;
-    background: #ffffff;
-    border: 1px solid #ddd6fe;
-    color: #6d28d9;
-    font-size: 12px;
-    font-weight: 750;
-}
-
-
-/* SECTION */
-
-.section-title {
-    font-size: 27px;
-    font-weight: 800;
-    color: #17132b;
-    margin: 30px 0 7px;
-}
-
-.section-sub {
-    color: #667085;
-    margin-bottom: 20px;
-}
-
-
-/* KPI */
-
-.kpi {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 18px;
-    padding: 21px;
-    min-height: 125px;
-    box-shadow:
-        0 5px 20px
-        rgba(15, 23, 42, 0.045);
-}
-
-.kpi-label {
-    color: #667085;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: .09em;
-    font-weight: 750;
-}
-
-.kpi-value {
-    color: #17132b;
-    font-size: 30px;
-    font-weight: 850;
-    margin-top: 8px;
-}
-
-.metric-note {
-    color: #98a2b3;
-    font-size: 11px;
-    margin-top: 5px;
-}
-
-
-/* CARDS */
-
-.card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 18px;
-    padding: 21px;
-    margin-bottom: 15px;
-    box-shadow:
-        0 5px 20px
-        rgba(15, 23, 42, 0.035);
-}
-
-.card-title {
-    font-size: 17px;
-    font-weight: 750;
-    color: #1f2937;
-    margin-bottom: 8px;
-}
-
-.card-text {
-    color: #667085;
-    line-height: 1.6;
-}
-
-
-/* STATUS */
-
-.success-box {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    color: #166534;
-    border-radius: 14px;
-    padding: 15px 17px;
-    margin: 14px 0;
-}
-
-.info-box {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    color: #1d4ed8;
-    border-radius: 14px;
-    padding: 15px 17px;
-    margin: 14px 0;
-}
-
-.warning-box {
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    color: #92400e;
-    border-radius: 14px;
-    padding: 15px 17px;
-    margin: 14px 0;
-}
-
-
-/* BUTTONS */
-
-.stButton > button {
-    border-radius: 11px;
-    border: 1px solid #ddd6fe;
-    background: #ffffff;
-    color: #5b21b6;
-    font-weight: 650;
-}
-
-.stButton > button:hover {
-    border-color: #8b5cf6;
-    background: #f5f3ff;
-}
-
-
-/* FILE UPLOAD */
-
-[data-testid="stFileUploader"] {
-    background: #fafaff;
-    border-radius: 15px;
-}
-
-
-/* DATAFRAME */
-
-[data-testid="stDataFrame"] {
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-}
-
-
-/* FOOTER */
-
-.footer {
-    color: #98a2b3;
-    text-align: center;
-    padding: 40px 0 10px;
-    font-size: 12px;
-}
-
-</style>
-""")
-
-
-# ============================================================
-# PLOTLY THEME
-# ============================================================
-
-PLOTLY_LAYOUT = dict(
-    template="plotly_white",
-    paper_bgcolor="#ffffff",
-    plot_bgcolor="#ffffff",
-    font=dict(
-        color="#344054"
-    ),
-    margin=dict(
-        l=30,
-        r=25,
-        t=60,
-        b=30
-    ),
+EMOTION_VECTORIZER_PATH = os.path.join(
+    BASE_DIR, "emotion_vectorizer.pkl"
 )
 
 
@@ -373,9 +84,8 @@ SENTIMENT_LABELS = {
 SENTIMENT_ORDER = [
     "Negative",
     "Neutral",
-    "Positive"
+    "Positive",
 ]
-
 
 EMOTION_LABELS = {
     0: "Sadness",
@@ -404,9 +114,8 @@ EMOTION_ORDER = [
     "Love",
     "Anger",
     "Fear",
-    "Surprise"
+    "Surprise",
 ]
-
 
 TOPIC_NAMES = {
     1: "AI Automation & Productivity",
@@ -416,61 +125,18 @@ TOPIC_NAMES = {
 
 
 # ============================================================
-# GENERAL HELPERS
+# UI HELPERS
 # ============================================================
 
-def normalize_label(value, mapping):
-
-    if isinstance(
-        value,
-        (int, np.integer)
-    ):
-        return mapping.get(
-            int(value),
-            "Unknown"
-        )
-
-    value = str(value).strip()
-
-    if value in mapping:
-        return mapping[value]
-
-    lower = value.lower()
-
-    if lower in mapping:
-        return mapping[lower]
-
+def render_html(content):
     try:
-        return mapping.get(
-            int(float(value)),
-            "Unknown"
-        )
+        st.html(content)
     except Exception:
-        return (
-            value.title()
-            if value
-            else "Unknown"
-        )
-
-
-def normalize_sentiment(value):
-    return normalize_label(
-        value,
-        SENTIMENT_LABELS
-    )
-
-
-def normalize_emotion(value):
-    return normalize_label(
-        value,
-        EMOTION_LABELS
-    )
+        st.markdown(content, unsafe_allow_html=True)
 
 
 def compact_number(value):
-
     try:
-
         value = float(value)
 
         if value >= 1_000_000_000:
@@ -485,117 +151,82 @@ def compact_number(value):
         return f"{int(value):,}"
 
     except Exception:
-
         return "0"
 
 
-def detect_column(
-    df,
-    candidates
-):
+def normalize_label(value):
+    if pd.isna(value):
+        return ""
 
-    columns = {
-        str(c).strip().lower(): c
-        for c in df.columns
-    }
+    value = str(value).strip().lower()
 
-    # Exact match first
-    for candidate in candidates:
-
-        if candidate.lower() in columns:
-
-            return columns[
-                candidate.lower()
-            ]
-
-    # Partial match second
-    for column in df.columns:
-
-        column_lower = (
-            str(column)
-            .strip()
-            .lower()
-        )
-
-        for candidate in candidates:
-
-            if candidate.lower() in column_lower:
-
-                return column
-
-    return None
+    return value
 
 
 def parse_metric(value):
-
     if pd.isna(value):
-        return 0.0
+        return 0
 
-    if isinstance(
-        value,
-        (int, float, np.number)
-    ):
+    if isinstance(value, (int, float, np.integer, np.floating)):
         return float(value)
 
-    value = str(value).strip()
+    value = str(value).strip().upper()
 
     if not value:
-        return 0.0
-
-    value = (
-        value
-        .replace(",", "")
-        .replace(" ", "")
-        .replace("+", "")
-    )
+        return 0
 
     multiplier = 1
 
-    last = value[-1:].upper()
-
-    if last == "K":
+    if value.endswith("K"):
         multiplier = 1_000
         value = value[:-1]
 
-    elif last == "M":
+    elif value.endswith("M"):
         multiplier = 1_000_000
         value = value[:-1]
 
-    elif last == "B":
+    elif value.endswith("B"):
         multiplier = 1_000_000_000
         value = value[:-1]
+
+    value = value.replace(",", "")
 
     try:
         return float(value) * multiplier
 
     except Exception:
-        return 0.0
+        return 0
 
 
 def extract_hashtags(text):
+    if pd.isna(text):
+        return ""
 
-    return [
-        tag.lower()
-        for tag in re.findall(
-            r"#\w+",
-            str(text)
-        )
-    ]
+    tags = re.findall(
+        r"#([A-Za-z0-9_]+)",
+        str(text)
+    )
+
+    return ", ".join(
+        f"#{tag}" for tag in tags
+    )
 
 
 def clean_fallback(text):
+    if pd.isna(text):
+        return ""
 
-    text = str(text).lower()
+    text = str(text)
 
     text = re.sub(
         r"http\S+|www\S+",
-        "",
+        " ",
         text
     )
 
     text = re.sub(
         r"@\w+",
-        "",
+        " ",
         text
     )
 
@@ -606,50 +237,52 @@ def clean_fallback(text):
     )
 
     text = re.sub(
-        r"[^a-zA-Z\s]",
-        "",
+        r"\s+",
+        " ",
         text
     )
 
-    words = [
-        word
-        for word in text.split()
-        if word not in ENGLISH_STOP_WORDS
-    ]
-
-    return " ".join(words)
+    return text.strip()
 
 
-try:
-
-    from nlp_utils import clean_text
-
-except Exception:
-
-    clean_text = clean_fallback
+def clean_text(text):
+    return clean_fallback(text)
 
 
-def kpi_card(
-    label,
-    value,
-    note=""
-):
-
+def kpi_card(title, value, subtitle=""):
     return f"""
-    <div class="kpi">
-
-        <div class="kpi-label">
-            {html.escape(str(label))}
+    <div style="
+        background:linear-gradient(135deg,#ffffff,#f7f5ff);
+        border:1px solid #e9e5ff;
+        border-radius:18px;
+        padding:20px;
+        box-shadow:0 8px 25px rgba(79,70,229,.07);
+        min-height:125px;
+    ">
+        <div style="
+            font-size:13px;
+            color:#6b7280;
+            font-weight:600;
+            margin-bottom:8px;
+        ">
+            {html.escape(str(title))}
         </div>
 
-        <div class="kpi-value">
+        <div style="
+            font-size:30px;
+            font-weight:800;
+            color:#111827;
+        ">
             {html.escape(str(value))}
         </div>
 
-        <div class="metric-note">
-            {html.escape(str(note))}
+        <div style="
+            font-size:12px;
+            color:#8b8fa3;
+            margin-top:6px;
+        ">
+            {html.escape(str(subtitle))}
         </div>
-
     </div>
     """
 
@@ -658,467 +291,268 @@ def kpi_card(
 # PLATFORM DETECTION
 # ============================================================
 
-def detect_platform(
-    df,
-    filename=""
-):
-
-    filename_lower = (
-        str(filename)
-        .lower()
-    )
-
-    column_text = " ".join(
+def detect_platform(df):
+    columns = {
         str(c).lower()
         for c in df.columns
-    )
+    }
 
-    # Explicit platform column
-    platform_column = detect_column(
-        df,
-        [
-            "platform",
-            "social_platform",
-            "network",
-            "source"
-        ]
-    )
-
-    if platform_column:
-
-        values = (
-            df[platform_column]
-            .dropna()
-            .astype(str)
-            .str.lower()
-        )
-
-        detected = []
-
-        for value in values.unique():
-
-            if "youtube" in value:
-                detected.append(
-                    "YouTube"
-                )
-
-            elif (
-                "instagram" in value
-                or value == "ig"
-            ):
-                detected.append(
-                    "Instagram"
-                )
-
-            elif (
-                "twitter" in value
-                or value == "x"
-                or "twitter/x" in value
-            ):
-                detected.append(
-                    "Twitter/X"
-                )
-
-            elif "reddit" in value:
-                detected.append(
-                    "Reddit"
-                )
-
-        if detected:
-            return sorted(
-                set(detected)
-            )
-
-    # YouTube signals
-    youtube_signals = [
+    if {
         "video_id",
         "channel_title",
+    } & columns:
+        return "YouTube"
+
+    if {
         "channel_id",
         "video_views",
-        "subscriber_count",
-        "author_channel_id",
-    ]
+    } & columns:
+        return "YouTube"
 
-    if (
-        any(
-            signal in column_text
-            for signal in youtube_signals
-        )
-        or
-        "youtube" in filename_lower
-    ):
-        return ["YouTube"]
-
-    # Instagram signals
-    instagram_signals = [
-        "media_id",
+    if {
         "shortcode",
         "owner_username",
-        "is_video",
-        "carousel",
+    } & columns:
+        return "Instagram"
+
+    if {
         "save_count",
-        "saves",
-    ]
+        "media_id",
+    } & columns:
+        return "Instagram"
 
-    if (
-        any(
-            signal in column_text
-            for signal in instagram_signals
-        )
-        or
-        "instagram" in filename_lower
-        or
-        "insta" in filename_lower
-    ):
-        return ["Instagram"]
-
-    # Twitter/X signals
-    twitter_signals = [
+    if {
         "tweet_id",
         "retweet_count",
+    } & columns:
+        return "Twitter/X"
+
+    if {
         "favorite_count",
-        "favourites",
         "user_followers",
-        "tweet",
-    ]
+    } & columns:
+        return "Twitter/X"
 
-    if (
-        any(
-            signal in column_text
-            for signal in twitter_signals
-        )
-        or
-        "twitter" in filename_lower
-        or
-        "tweet" in filename_lower
-    ):
-        return ["Twitter/X"]
-
-    # Reddit signals
-    reddit_signals = [
+    if {
         "subreddit",
-        "num_comments",
-        "score",
         "upvote_ratio",
-        "reddit_id",
-        "permalink",
-    ]
+    } & columns:
+        return "Reddit"
 
-    if (
-        any(
-            signal in column_text
-            for signal in reddit_signals
-        )
-        or
-        "reddit" in filename_lower
-    ):
-        return ["Reddit"]
+    if "reddit_id" in columns:
+        return "Reddit"
 
-    return ["Unknown"]
+    return "Unknown"
 
 
 # ============================================================
-# DATA STANDARDIZATION
+# COLUMN DETECTION
 # ============================================================
 
-def standardize_social_data(
-    raw_df,
-    filename=""
-):
+def detect_column(df, candidates):
+    lookup = {
+        str(column).strip().lower(): column
+        for column in df.columns
+    }
 
-    df = raw_df.copy()
+    for candidate in candidates:
+        if candidate.lower() in lookup:
+            return lookup[candidate.lower()]
 
-    detected_platforms = detect_platform(
+    return None
+
+
+TEXT_COLUMNS = [
+    "text",
+    "post",
+    "content",
+    "tweet",
+    "message",
+    "comment",
+    "caption",
+    "description",
+    "body",
+    "review",
+    "title",
+]
+
+LIKE_COLUMNS = [
+    "likes",
+    "like",
+    "likes_count",
+    "like_count",
+    "favorite_count",
+    "favourites",
+    "favorites",
+    "reactions",
+    "total_likes",
+]
+
+COMMENT_COLUMNS = [
+    "comments",
+    "comment_count",
+    "comments_count",
+    "num_comments",
+    "replies",
+    "reply_count",
+]
+
+SHARE_COLUMNS = [
+    "shares",
+    "share",
+    "shares_count",
+    "retweets",
+    "retweet_count",
+    "reposts",
+    "repost_count",
+]
+
+VIEW_COLUMNS = [
+    "views",
+    "view_count",
+    "views_count",
+    "video_views",
+    "play_count",
+    "plays",
+    "impressions",
+]
+
+DATE_COLUMNS = [
+    "date",
+    "created_at",
+    "timestamp",
+    "time",
+    "datetime",
+    "published_at",
+    "published",
+    "upload_date",
+    "posted_at",
+]
+
+FOLLOWER_COLUMNS = [
+    "author_followers",
+    "followers",
+    "follower_count",
+    "user_followers",
+    "subscribers",
+    "subscriber_count",
+]
+
+LANGUAGE_COLUMNS = [
+    "language",
+    "lang",
+]
+
+URL_COLUMNS = [
+    "source_url",
+    "url",
+    "link",
+    "permalink",
+]
+
+TYPE_COLUMNS = [
+    "post_type",
+    "content_type",
+    "media_type",
+    "type",
+]
+
+
+# ============================================================
+# UNIVERSAL DATA STANDARDIZATION
+# ============================================================
+
+def standardize_social_data(df):
+
+    df = df.copy()
+
+    text_col = detect_column(
         df,
-        filename
+        TEXT_COLUMNS
     )
 
-    # --------------------------------------------------------
-    # TEXT
-    # --------------------------------------------------------
-
-    text_column = detect_column(
+    likes_col = detect_column(
         df,
-        [
-            "text",
-            "post",
-            "content",
-            "tweet",
-            "message",
-            "comment",
-            "caption",
-            "description",
-            "body",
-            "review",
-            "title"
-        ]
+        LIKE_COLUMNS
     )
 
-    if text_column is None:
-
-        raise ValueError(
-            "No text column found. "
-            "Use a column such as text, "
-            "content, tweet, comment, "
-            "caption or post."
-        )
-
-    df["text"] = (
-        df[text_column]
-        .fillna("")
-        .astype(str)
-    )
-
-
-    # --------------------------------------------------------
-    # PLATFORM
-    # --------------------------------------------------------
-
-    platform_column = detect_column(
+    comments_col = detect_column(
         df,
-        [
-            "platform",
-            "social_platform",
-            "network",
-            "source"
-        ]
+        COMMENT_COLUMNS
     )
 
-    if platform_column:
+    shares_col = detect_column(
+        df,
+        SHARE_COLUMNS
+    )
 
-        df["platform"] = (
-            df[platform_column]
-            .fillna(
-                detected_platforms[0]
-            )
-            .astype(str)
-        )
+    views_col = detect_column(
+        df,
+        VIEW_COLUMNS
+    )
 
-        def normalize_platform(value):
+    date_col = detect_column(
+        df,
+        DATE_COLUMNS
+    )
 
-            value = (
-                str(value)
-                .strip()
-                .lower()
-            )
+    follower_col = detect_column(
+        df,
+        FOLLOWER_COLUMNS
+    )
 
-            if "youtube" in value:
-                return "YouTube"
+    language_col = detect_column(
+        df,
+        LANGUAGE_COLUMNS
+    )
 
-            if (
-                "instagram" in value
-                or value == "ig"
-            ):
-                return "Instagram"
+    url_col = detect_column(
+        df,
+        URL_COLUMNS
+    )
 
-            if (
-                "twitter" in value
-                or value == "x"
-                or "twitter/x" in value
-            ):
-                return "Twitter/X"
+    type_col = detect_column(
+        df,
+        TYPE_COLUMNS
+    )
 
-            if "reddit" in value:
-                return "Reddit"
+    if text_col:
+        df["text"] = df[text_col].fillna("").astype(str)
+    else:
+        df["text"] = ""
 
-            if value in [
-                "",
-                "nan",
-                "none"
-            ]:
-                return "Unknown"
+    if "platform" not in df.columns:
 
-            return str(value).title()
+        df["platform"] = detect_platform(df)
+
+    else:
 
         df["platform"] = (
             df["platform"]
-            .apply(normalize_platform)
-        )
-
-    else:
-
-        df["platform"] = (
-            detected_platforms[0]
-            if len(detected_platforms) == 1
-            else "Multi-platform"
-        )
-
-
-    # --------------------------------------------------------
-    # POST ID
-    # --------------------------------------------------------
-
-    post_id_column = detect_column(
-        df,
-        [
-            "post_id",
-            "tweet_id",
-            "video_id",
-            "comment_id",
-            "media_id",
-            "reddit_id",
-            "id"
-        ]
-    )
-
-    if post_id_column:
-
-        df["post_id"] = (
-            df[post_id_column]
+            .fillna("Unknown")
             .astype(str)
         )
 
-    else:
+    if "post_id" not in df.columns:
 
-        df["post_id"] = [
-            f"TS-{i:06d}"
-            for i in range(
-                1,
-                len(df) + 1
-            )
-        ]
-
-
-    # --------------------------------------------------------
-    # LIKES
-    # --------------------------------------------------------
-
-    likes_column = detect_column(
-        df,
-        [
-            "likes",
-            "like",
-            "likes_count",
-            "like_count",
-            "favorite_count",
-            "favourites",
-            "favorites",
-            "reactions",
-            "total_likes"
-        ]
-    )
-
-    if likes_column:
-
-        df["likes"] = (
-            df[likes_column]
-            .apply(parse_metric)
+        df["post_id"] = np.arange(
+            1,
+            len(df) + 1
         )
 
-    else:
-
-        df["likes"] = 0.0
-
-
-    # --------------------------------------------------------
-    # COMMENTS
-    # --------------------------------------------------------
-
-    comments_column = detect_column(
-        df,
-        [
-            "comments",
-            "comment_count",
-            "comments_count",
-            "num_comments",
-            "replies",
-            "reply_count"
-        ]
-    )
-
-    if comments_column:
-
-        df["comments"] = (
-            df[comments_column]
-            .apply(parse_metric)
+    if type_col:
+        df["post_type"] = (
+            df[type_col]
+            .fillna("post")
+            .astype(str)
         )
-
     else:
+        df["post_type"] = "post"
 
-        df["comments"] = 0.0
-
-
-    # --------------------------------------------------------
-    # SHARES
-    # --------------------------------------------------------
-
-    shares_column = detect_column(
-        df,
-        [
-            "shares",
-            "share",
-            "shares_count",
-            "retweets",
-            "retweet_count",
-            "reposts",
-            "repost_count"
-        ]
-    )
-
-    if shares_column:
-
-        df["shares"] = (
-            df[shares_column]
-            .apply(parse_metric)
-        )
-
-    else:
-
-        df["shares"] = 0.0
-
-
-    # --------------------------------------------------------
-    # VIEWS
-    # --------------------------------------------------------
-
-    views_column = detect_column(
-        df,
-        [
-            "views",
-            "view_count",
-            "views_count",
-            "video_views",
-            "play_count",
-            "plays",
-            "impressions"
-        ]
-    )
-
-    if views_column:
-
-        df["views"] = (
-            df[views_column]
-            .apply(parse_metric)
-        )
-
-    else:
-
-        df["views"] = 0.0
-
-
-    # --------------------------------------------------------
-    # DATE
-    # --------------------------------------------------------
-
-    date_column = detect_column(
-        df,
-        [
-            "date",
-            "created_at",
-            "timestamp",
-            "time",
-            "datetime",
-            "published_at",
-            "published",
-            "upload_date",
-            "posted_at"
-        ]
-    )
-
-    if date_column:
+    if date_col:
 
         df["date"] = pd.to_datetime(
-            df[date_column],
+            df[date_col],
             errors="coerce"
         )
 
@@ -1126,248 +560,181 @@ def standardize_social_data(
 
         df["date"] = pd.NaT
 
-
-    # --------------------------------------------------------
-    # AUTHOR
-    # --------------------------------------------------------
-
-    author_column = detect_column(
-        df,
-        [
-            "author",
-            "username",
-            "user",
-            "creator",
-            "channel",
-            "author_name"
-        ]
-    )
-
-    if author_column:
-
-        df["author"] = (
-            df[author_column]
-            .fillna("Unknown")
-            .astype(str)
-        )
-
+    if likes_col:
+        df["likes"] = df[likes_col].apply(parse_metric)
     else:
+        df["likes"] = 0
 
-        df["author"] = "Unknown"
+    if comments_col:
+        df["comments"] = df[comments_col].apply(parse_metric)
+    else:
+        df["comments"] = 0
 
+    if shares_col:
+        df["shares"] = df[shares_col].apply(parse_metric)
+    else:
+        df["shares"] = 0
 
-    # --------------------------------------------------------
-    # FOLLOWERS
-    # --------------------------------------------------------
+    if views_col:
+        df["views"] = df[views_col].apply(parse_metric)
+    else:
+        df["views"] = 0
 
-    follower_column = detect_column(
-        df,
-        [
-            "author_followers",
-            "followers",
-            "follower_count",
-            "user_followers",
-            "subscribers",
-            "subscriber_count"
-        ]
-    )
-
-    if follower_column:
-
+    if follower_col:
         df["author_followers"] = (
-            df[follower_column]
+            df[follower_col]
             .apply(parse_metric)
         )
-
     else:
+        df["author_followers"] = 0
 
-        df["author_followers"] = 0.0
-
-
-    # --------------------------------------------------------
-    # LANGUAGE
-    # --------------------------------------------------------
-
-    language_column = detect_column(
-        df,
-        [
-            "language",
-            "lang"
-        ]
-    )
-
-    if language_column:
-
+    if language_col:
         df["language"] = (
-            df[language_column]
+            df[language_col]
             .fillna("Unknown")
             .astype(str)
+        )
+    else:
+        df["language"] = "Unknown"
+
+    if url_col:
+        df["source_url"] = (
+            df[url_col]
+            .fillna("")
+            .astype(str)
+        )
+    else:
+        df["source_url"] = ""
+
+    if "hashtags" not in df.columns:
+
+        df["hashtags"] = df["text"].apply(
+            extract_hashtags
         )
 
     else:
 
-        df["language"] = "Unknown"
-
-
-    # --------------------------------------------------------
-    # URL
-    # --------------------------------------------------------
-
-    url_column = detect_column(
-        df,
-        [
-            "source_url",
-            "url",
-            "link",
-            "permalink"
-        ]
-    )
-
-    if url_column:
-
-        df["source_url"] = (
-            df[url_column]
+        df["hashtags"] = (
+            df["hashtags"]
             .fillna("")
             .astype(str)
         )
 
-    else:
-
-        df["source_url"] = ""
-
-
-    # --------------------------------------------------------
-    # POST TYPE
-    # --------------------------------------------------------
-
-    type_column = detect_column(
-        df,
-        [
-            "post_type",
-            "content_type",
-            "media_type",
-            "type"
-        ]
+    df["clean_text"] = df["text"].apply(
+        clean_text
     )
-
-    if type_column:
-
-        df["post_type"] = (
-            df[type_column]
-            .fillna("Unknown")
-            .astype(str)
-        )
-
-    else:
-
-        df["post_type"] = "Unknown"
-
-
-    # --------------------------------------------------------
-    # CLEAN TEXT
-    # --------------------------------------------------------
-
-    df["clean_text"] = (
-        df["text"]
-        .apply(clean_text)
-    )
-
-
-    # --------------------------------------------------------
-    # HASHTAGS
-    # --------------------------------------------------------
-
-    df["hashtags"] = (
-        df["text"]
-        .apply(extract_hashtags)
-    )
-
-
-    # --------------------------------------------------------
-    # ENGAGEMENT
-    # --------------------------------------------------------
 
     df["engagement"] = (
         df["likes"]
-        +
-        df["comments"]
-        +
-        df["shares"]
+        + df["comments"]
+        + df["shares"]
     )
 
-
-    # --------------------------------------------------------
-    # ENGAGEMENT RATE
-    # --------------------------------------------------------
-
-    df["engagement_rate"] = np.where(
-        df["views"] > 0,
-        (
-            df["engagement"]
-            /
-            df["views"]
-        ) * 100,
+    denominator = df["views"].replace(
+        0,
         np.nan
     )
 
-
-    return (
-        df,
-        detected_platforms
+    df["engagement_rate"] = (
+        df["engagement"]
+        / denominator
+        * 100
     )
+
+    df["engagement_rate"] = (
+        df["engagement_rate"]
+        .replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+        .fillna(0)
+    )
+
+    return df
 
 
 # ============================================================
-# LOAD MODELS
+# MODEL LOADING
 # ============================================================
 
 @st.cache_resource
 def load_models():
 
-    models = {}
+    sentiment_model = None
+    vectorizer = None
+    topic_model = None
+    topic_vectorizer = None
+    emotion_model = None
+    emotion_vectorizer = None
 
-    paths = {
-        "sentiment_model":
-            SENTIMENT_MODEL_PATH,
+    try:
+        if os.path.exists(
+            SENTIMENT_MODEL_PATH
+        ):
+            sentiment_model = joblib.load(
+                SENTIMENT_MODEL_PATH
+            )
+    except Exception:
+        pass
 
-        "sentiment_vectorizer":
-            SENTIMENT_VECTOR_PATH,
+    try:
+        if os.path.exists(
+            TFIDF_PATH
+        ):
+            vectorizer = joblib.load(
+                TFIDF_PATH
+            )
+    except Exception:
+        pass
 
-        "emotion_model":
-            EMOTION_MODEL_PATH,
+    try:
+        if os.path.exists(
+            TOPIC_MODEL_PATH
+        ):
+            topic_model = joblib.load(
+                TOPIC_MODEL_PATH
+            )
+    except Exception:
+        pass
 
-        "emotion_vectorizer":
-            EMOTION_VECTOR_PATH,
+    try:
+        if os.path.exists(
+            TOPIC_VECTORIZER_PATH
+        ):
+            topic_vectorizer = joblib.load(
+                TOPIC_VECTORIZER_PATH
+            )
+    except Exception:
+        pass
 
-        "topic_model":
-            TOPIC_MODEL_PATH,
+    try:
+        if os.path.exists(
+            EMOTION_MODEL_PATH
+        ):
+            emotion_model = joblib.load(
+                EMOTION_MODEL_PATH
+            )
+    except Exception:
+        pass
 
-        "topic_vectorizer":
-            TOPIC_VECTOR_PATH,
-    }
+    try:
+        if os.path.exists(
+            EMOTION_VECTORIZER_PATH
+        ):
+            emotion_vectorizer = joblib.load(
+                EMOTION_VECTORIZER_PATH
+            )
+    except Exception:
+        pass
 
-    for name, path in paths.items():
-
-        if os.path.exists(path):
-
-            try:
-
-                models[name] = (
-                    joblib.load(path)
-                )
-
-            except Exception:
-
-                models[name] = None
-
-        else:
-
-            models[name] = None
-
-    return models
-
-
-models = load_models()
+    return (
+        sentiment_model,
+        vectorizer,
+        topic_model,
+        topic_vectorizer,
+        emotion_model,
+        emotion_vectorizer,
+    )
 
 
 # ============================================================
@@ -1376,2184 +743,694 @@ models = load_models()
 
 def run_ai_analysis(df):
 
+    df = df.copy()
+
+    (
+        sentiment_model,
+        vectorizer,
+        topic_model,
+        topic_vectorizer,
+        emotion_model,
+        emotion_vectorizer,
+    ) = load_models()
+
+    texts = (
+        df["clean_text"]
+        .fillna("")
+        .astype(str)
+    )
+
     # --------------------------------------------------------
     # SENTIMENT
     # --------------------------------------------------------
 
-    if (
-        models["sentiment_model"]
-        is not None
-        and
-        models["sentiment_vectorizer"]
-        is not None
-    ):
+    if sentiment_model is not None and vectorizer is not None:
 
         try:
 
-            X = (
-                models[
-                    "sentiment_vectorizer"
-                ]
-                .transform(
-                    df["clean_text"]
-                )
-            )
+            X = vectorizer.transform(texts)
 
-            predictions = (
-                models[
-                    "sentiment_model"
-                ]
-                .predict(X)
-            )
+            predictions = sentiment_model.predict(X)
 
-            df["sentiment"] = (
-                pd.Series(
-                    predictions,
-                    index=df.index
+            df["sentiment"] = [
+                SENTIMENT_LABELS.get(
+                    value,
+                    str(value).title()
                 )
-                .apply(
-                    normalize_sentiment
-                )
-            )
+                for value in predictions
+            ]
 
-            try:
+            if hasattr(
+                sentiment_model,
+                "predict_proba"
+            ):
 
                 probabilities = (
-                    models[
-                        "sentiment_model"
-                    ]
+                    sentiment_model
                     .predict_proba(X)
                 )
 
-                df[
-                    "sentiment_confidence"
-                ] = (
-                    probabilities
-                    .max(axis=1)
+                df["sentiment_confidence"] = (
+                    probabilities.max(axis=1)
                 )
 
-            except Exception:
+            else:
 
-                df[
-                    "sentiment_confidence"
-                ] = np.nan
+                df["sentiment_confidence"] = 0.0
 
         except Exception:
 
-            df["sentiment"] = "Unknown"
-
-            df[
-                "sentiment_confidence"
-            ] = np.nan
+            df["sentiment"] = "Neutral"
+            df["sentiment_confidence"] = 0.0
 
     else:
 
-        df["sentiment"] = "Unknown"
-
-        df[
-            "sentiment_confidence"
-        ] = np.nan
-
+        df["sentiment"] = "Neutral"
+        df["sentiment_confidence"] = 0.0
 
     # --------------------------------------------------------
     # EMOTION
     # --------------------------------------------------------
 
     if (
-        models["emotion_model"]
-        is not None
-        and
-        models["emotion_vectorizer"]
-        is not None
+        emotion_model is not None
+        and emotion_vectorizer is not None
     ):
 
         try:
 
-            X = (
-                models[
-                    "emotion_vectorizer"
-                ]
-                .transform(
-                    df["clean_text"]
-                )
+            X_emotion = (
+                emotion_vectorizer
+                .transform(texts)
             )
 
             predictions = (
-                models[
-                    "emotion_model"
-                ]
-                .predict(X)
+                emotion_model
+                .predict(X_emotion)
             )
 
-            df["emotion"] = (
-                pd.Series(
-                    predictions,
-                    index=df.index
+            df["emotion"] = [
+                EMOTION_LABELS.get(
+                    value,
+                    str(value).title()
                 )
-                .apply(
-                    normalize_emotion
-                )
-            )
+                for value in predictions
+            ]
 
-            try:
+            if hasattr(
+                emotion_model,
+                "predict_proba"
+            ):
 
                 probabilities = (
-                    models[
-                        "emotion_model"
-                    ]
-                    .predict_proba(X)
+                    emotion_model
+                    .predict_proba(X_emotion)
                 )
 
-                df[
-                    "emotion_confidence"
-                ] = (
-                    probabilities
-                    .max(axis=1)
+                df["emotion_confidence"] = (
+                    probabilities.max(axis=1)
                 )
 
-            except Exception:
+            else:
 
-                df[
-                    "emotion_confidence"
-                ] = np.nan
+                df["emotion_confidence"] = 0.0
 
         except Exception:
 
-            df["emotion"] = "Unknown"
-
-            df[
-                "emotion_confidence"
-            ] = np.nan
+            df["emotion"] = "Joy"
+            df["emotion_confidence"] = 0.0
 
     else:
 
-        df["emotion"] = "Unknown"
-
-        df[
-            "emotion_confidence"
-        ] = np.nan
-
+        df["emotion"] = "Joy"
+        df["emotion_confidence"] = 0.0
 
     # --------------------------------------------------------
     # TOPICS
     # --------------------------------------------------------
 
     if (
-        models["topic_model"]
-        is not None
-        and
-        models["topic_vectorizer"]
-        is not None
+        topic_model is not None
+        and topic_vectorizer is not None
     ):
 
         try:
 
-            X = (
-                models[
-                    "topic_vectorizer"
-                ]
-                .transform(
-                    df["clean_text"]
+            X_topic = (
+                topic_vectorizer
+                .transform(texts)
+            )
+
+            predictions = (
+                topic_model
+                .predict(X_topic)
+            )
+
+            df["topic_id"] = predictions
+
+            df["topic"] = [
+                TOPIC_NAMES.get(
+                    int(value),
+                    f"Topic {value}"
                 )
-            )
+                for value in predictions
+            ]
 
-            topic_probabilities = (
-                models[
-                    "topic_model"
-                ]
-                .transform(X)
-            )
+            if hasattr(
+                topic_model,
+                "predict_proba"
+            ):
 
-            topic_ids = (
-                topic_probabilities
-                .argmax(axis=1)
-                + 1
-            )
-
-            df["topic_id"] = topic_ids
-
-            df["topic"] = (
-                df["topic_id"]
-                .map(TOPIC_NAMES)
-                .fillna(
-                    df["topic_id"]
-                    .apply(
-                        lambda x:
-                        f"Topic {x}"
-                    )
+                probabilities = (
+                    topic_model
+                    .predict_proba(X_topic)
                 )
-            )
 
-            df[
-                "topic_confidence"
-            ] = (
-                topic_probabilities
-                .max(axis=1)
-            )
+                df["topic_confidence"] = (
+                    probabilities.max(axis=1)
+                )
+
+            else:
+
+                df["topic_confidence"] = 0.0
 
         except Exception:
 
             df["topic_id"] = 0
-
-            df["topic"] = (
-                "Unknown"
-            )
-
-            df[
-                "topic_confidence"
-            ] = np.nan
+            df["topic"] = "General"
+            df["topic_confidence"] = 0.0
 
     else:
 
         df["topic_id"] = 0
-
-        df["topic"] = "Unknown"
-
-        df[
-            "topic_confidence"
-        ] = np.nan
-
+        df["topic"] = "General"
+        df["topic_confidence"] = 0.0
 
     # --------------------------------------------------------
     # TREND SCORE
     # --------------------------------------------------------
 
-    confidence = (
-        df[
-            "sentiment_confidence"
-        ]
+    engagement_score = np.log1p(
+        df["engagement"]
+    )
+
+    views_score = np.log1p(
+        df["views"]
+    )
+
+    sentiment_bonus = (
+        df["sentiment"]
+        .map({
+            "Positive": 1.0,
+            "Neutral": 0.5,
+            "Negative": 0.2,
+        })
         .fillna(0.5)
     )
 
-    df["trend_score"] = (
-        df["engagement"]
-        *
-        (
-            0.5
-            +
-            confidence * 0.5
-        )
+    raw_score = (
+        engagement_score * 0.55
+        + views_score * 0.35
+        + sentiment_bonus * 0.10
     )
 
-
-    # --------------------------------------------------------
-    # TREND SCORE NORMALIZED
-    # --------------------------------------------------------
-
-    max_score = (
-        df["trend_score"]
-        .max()
-    )
-
-    if (
-        pd.notna(max_score)
-        and
-        max_score > 0
-    ):
+    if raw_score.max() > raw_score.min():
 
         df["trend_score_normalized"] = (
-            df["trend_score"]
+            (raw_score - raw_score.min())
             /
-            max_score
-        ) * 100
+            (
+                raw_score.max()
+                - raw_score.min()
+            )
+            * 100
+        )
 
     else:
 
-        df[
-            "trend_score_normalized"
-        ] = 0
+        df["trend_score_normalized"] = 0
 
+    df["trend_score"] = (
+        df["trend_score_normalized"]
+        .round(2)
+    )
 
     return df
 
 
 # ============================================================
-# SIDEBAR
+# YOUTUBE API
 # ============================================================
 
-with st.sidebar:
+YOUTUBE_BASE_URL = (
+    "https://www.googleapis.com/youtube/v3"
+)
 
-    render_html("""
-    <div style="
-        padding:8px 0 22px;
-    ">
 
-        <div style="
-            font-size:27px;
-            font-weight:850;
-            color:#17132b;
-        ">
-            TrendSense AI
-        </div>
+def get_youtube_api_key():
 
-        <div style="
-            color:#667085;
-            font-size:12px;
-            margin-top:5px;
-        ">
-            Social Intelligence Platform
-        </div>
-
-    </div>
-    """)
-
-    st.markdown("### 📂 Data Source")
-
-    source = st.radio(
-        "Choose data",
-        [
-            "Demo Dataset",
-            "Upload CSV"
+    try:
+        return st.secrets[
+            "YOUTUBE_API_KEY"
         ]
-    )
 
-    uploaded_file = None
-
-    if source == "Upload CSV":
-
-        uploaded_file = st.file_uploader(
-            "Upload social-media CSV",
-            type=["csv"],
-            help=(
-                "Works with YouTube, Instagram, "
-                "Twitter/X, Reddit and generic "
-                "social-media datasets."
-            )
-        )
-
-    st.markdown("---")
-
-    st.markdown("### ⚙️ Filters")
-
-    search_query = st.text_input(
-        "Search posts",
-        placeholder="Search keywords..."
-    )
-
-    sentiment_filter = st.multiselect(
-        "Sentiment",
-        SENTIMENT_ORDER
-    )
-
-    emotion_filter = st.multiselect(
-        "Emotion",
-        EMOTION_ORDER
-    )
-
-    min_likes = st.number_input(
-        "Minimum likes",
-        min_value=0,
-        value=0,
-        step=10
-    )
+    except Exception:
+        return ""
 
 
-# ============================================================
-# LOAD DATA
-# ============================================================
-
-if (
-    source == "Upload CSV"
-    and
-    uploaded_file is not None
+def youtube_request(
+    endpoint,
+    params
 ):
+
+    url = (
+        f"{YOUTUBE_BASE_URL}/{endpoint}"
+        f"?{urllib.parse.urlencode(params)}"
+    )
 
     try:
 
-        raw_df = pd.read_csv(
-            uploaded_file
-        )
-
-        filename = (
-            uploaded_file.name
-        )
-
-        data_source_label = (
-            filename
-        )
-
-    except Exception as error:
-
-        st.error(
-            f"Could not read CSV: {error}"
-        )
-
-        st.stop()
-
-else:
-
-    if not os.path.exists(
-        DATA_PATH
-    ):
-
-        st.error(
-            "Demo dataset not found. "
-            "Upload a CSV dataset instead."
-        )
-
-        st.stop()
-
-    raw_df = pd.read_csv(
-        DATA_PATH
-    )
-
-    filename = (
-        "social_media.csv"
-    )
-
-    data_source_label = (
-        "Demo Dataset"
-    )
-
-
-# ============================================================
-# STANDARDIZE
-# ============================================================
-
-try:
-
-    df, detected_platforms = (
-        standardize_social_data(
-            raw_df,
-            filename
-        )
-    )
-
-except Exception as error:
-
-    st.error(
-        f"Dataset standardization failed: {error}"
-    )
-
-    st.info(
-        "Make sure your CSV contains a text/content/comment/post "
-        "column."
-    )
-
-    st.stop()
-
-
-# ============================================================
-# AI PIPELINE
-# ============================================================
-
-with st.spinner(
-    "Running TrendSense AI analysis..."
-):
-
-    df = run_ai_analysis(
-        df
-    )
-
-
-# ============================================================
-# APPLY FILTERS
-# ============================================================
-
-filtered_df = df.copy()
-
-
-if search_query.strip():
-
-    filtered_df = filtered_df[
-        filtered_df["text"]
-        .str.contains(
-            re.escape(
-                search_query.strip()
-            ),
-            case=False,
-            na=False
-        )
-    ]
-
-
-if sentiment_filter:
-
-    filtered_df = filtered_df[
-        filtered_df[
-            "sentiment"
-        ].isin(
-            sentiment_filter
-        )
-    ]
-
-
-if emotion_filter:
-
-    filtered_df = filtered_df[
-        filtered_df[
-            "emotion"
-        ].isin(
-            emotion_filter
-        )
-    ]
-
-
-filtered_df = filtered_df[
-    filtered_df["likes"]
-    >=
-    min_likes
-]
-
-
-# ============================================================
-# HERO
-# ============================================================
-
-platform_text = " • ".join(
-    detected_platforms
-)
-
-render_html(
-    f"""
-    <div class="hero">
-
-        <div class="hero-title">
-            <span class="hero-gradient">
-                TrendSense AI
-            </span>
-        </div>
-
-        <div class="hero-sub">
-
-            Turn social-media conversations
-            into intelligent business insights.
-
-            TrendSense detects sentiment,
-            emotions, topics, hashtags,
-            engagement patterns and emerging trends
-            across multiple platforms.
-
-        </div>
-
-        <div class="source-pill">
-
-            📂 {html.escape(str(data_source_label))}
-            &nbsp; • &nbsp;
-            📱 {html.escape(platform_text)}
-            &nbsp; • &nbsp;
-            {len(df):,} records
-
-        </div>
-
-    </div>
-    """
-)
-
-
-# ============================================================
-# PIPELINE VISUAL
-# ============================================================
-
-render_html("""
-<div class="card">
-
-    <div class="card-title">
-        🚀 TrendSense Intelligence Pipeline
-    </div>
-
-    <div class="card-text">
-
-        CSV
-        →
-        Platform Detection
-        →
-        NLP
-        →
-        Sentiment
-        →
-        Emotion
-        →
-        Topics
-        →
-        Hashtags
-        →
-        Trend Score
-        →
-        Platform Comparison
-        →
-        Business Insights
-
-    </div>
-
-</div>
-""")
-
-
-# ============================================================
-# DATA STATUS
-# ============================================================
-
-render_html(
-    f"""
-    <div class="success-box">
-
-        <b>✓ Dataset connected successfully</b><br>
-
-        Detected platform:
-        <b>{html.escape(platform_text)}</b>
-        &nbsp; • &nbsp;
-
-        Raw records:
-        <b>{len(raw_df):,}</b>
-        &nbsp; • &nbsp;
-
-        Analyzed records:
-        <b>{len(df):,}</b>
-
-    </div>
-    """
-)
-
-
-# ============================================================
-# KPI
-# ============================================================
-
-total_posts = len(
-    filtered_df
-)
-
-total_likes = (
-    filtered_df["likes"]
-    .sum()
-)
-
-total_comments = (
-    filtered_df["comments"]
-    .sum()
-)
-
-total_engagement = (
-    filtered_df["engagement"]
-    .sum()
-)
-
-columns = st.columns(4)
-
-
-with columns[0]:
-
-    render_html(
-        kpi_card(
-            "Posts",
-            compact_number(
-                total_posts
-            ),
-            "Filtered records"
-        )
-    )
-
-
-with columns[1]:
-
-    render_html(
-        kpi_card(
-            "Likes",
-            compact_number(
-                total_likes
-            ),
-            "Total likes"
-        )
-    )
-
-
-with columns[2]:
-
-    render_html(
-        kpi_card(
-            "Engagement",
-            compact_number(
-                total_engagement
-            ),
-            "Likes + comments + shares"
-        )
-    )
-
-
-with columns[3]:
-
-    avg_trend = (
-        filtered_df[
-            "trend_score_normalized"
-        ].mean()
-        if len(filtered_df)
-        else 0
-    )
-
-    render_html(
-        kpi_card(
-            "Trend Index",
-            f"{avg_trend:.1f}",
-            "Average trend score"
-        )
-    )
-
-
-# ============================================================
-# TABS
-# ============================================================
-
-tabs = st.tabs(
-    [
-        "📊 Overview",
-        "💭 Sentiment & Emotion",
-        "🔥 Topics & Trends",
-        "🌐 Platform Comparison",
-        "💼 Business Insights",
-        "🧪 Model Performance",
-        "🔎 Post Explorer",
-        "📄 Reports"
-    ]
-)
-
-
-# ============================================================
-# TAB 1 — OVERVIEW
-# ============================================================
-
-with tabs[0]:
-
-    render_html(
-        """
-        <div class="section-title">
-            Social Intelligence Overview
-        </div>
-
-        <div class="section-sub">
-            A high-level view of what your audience
-            is talking about and how strongly
-            they are engaging.
-        </div>
-        """
-    )
-
-    col1, col2 = st.columns(2)
-
-
-    with col1:
-
-        sentiment_df = (
-            filtered_df[
-                "sentiment"
-            ]
-            .value_counts()
-            .reindex(
-                SENTIMENT_ORDER,
-                fill_value=0
-            )
-            .reset_index()
-        )
-
-        sentiment_df.columns = [
-            "Sentiment",
-            "Count"
-        ]
-
-        fig = px.pie(
-            sentiment_df,
-            names="Sentiment",
-            values="Count",
-            hole=0.58,
-            title="Sentiment Distribution"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=420
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-    with col2:
-
-        emotion_df = (
-            filtered_df[
-                "emotion"
-            ]
-            .value_counts()
-            .reset_index()
-        )
-
-        emotion_df.columns = [
-            "Emotion",
-            "Count"
-        ]
-
-        fig = px.bar(
-            emotion_df,
-            x="Emotion",
-            y="Count",
-            title="Emotion Distribution"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=420
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-    # Engagement over time
-
-    date_df = (
-        filtered_df
-        .dropna(
-            subset=["date"]
-        )
-    )
-
-    if len(date_df):
-
-        trend_df = (
-            date_df
-            .groupby(
-                "date",
-                as_index=False
-            )[
-                "engagement"
-            ]
-            .sum()
-            .sort_values(
-                "date"
-            )
-        )
-
-        fig = px.line(
-            trend_df,
-            x="date",
-            y="engagement",
-            markers=True,
-            title="Engagement Over Time"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=430
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# TAB 2 — SENTIMENT & EMOTION
-# ============================================================
-
-with tabs[1]:
-
-    render_html(
-        """
-        <div class="section-title">
-            💭 Audience Sentiment & Emotion
-        </div>
-
-        <div class="section-sub">
-            Understand how people feel about the
-            conversations represented in your dataset.
-        </div>
-        """
-    )
-
-    col1, col2 = st.columns(2)
-
-
-    with col1:
-
-        sentiment_df = (
-            filtered_df[
-                "sentiment"
-            ]
-            .value_counts()
-            .reindex(
-                SENTIMENT_ORDER,
-                fill_value=0
-            )
-            .reset_index()
-        )
-
-        sentiment_df.columns = [
-            "Sentiment",
-            "Posts"
-        ]
-
-        fig = px.bar(
-            sentiment_df,
-            x="Sentiment",
-            y="Posts",
-            title="Sentiment Count"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=400
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-    with col2:
-
-        emotion_df = (
-            filtered_df[
-                "emotion"
-            ]
-            .value_counts()
-            .reset_index()
-        )
-
-        emotion_df.columns = [
-            "Emotion",
-            "Posts"
-        ]
-
-        fig = px.bar(
-            emotion_df,
-            x="Emotion",
-            y="Posts",
-            title="Emotion Count"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=400
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-    # Sentiment by platform
-
-    platform_sentiment = (
-        filtered_df
-        .groupby(
-            [
-                "platform",
-                "sentiment"
-            ]
-        )
-        .size()
-        .reset_index(
-            name="Posts"
-        )
-    )
-
-    if len(platform_sentiment):
-
-        fig = px.bar(
-            platform_sentiment,
-            x="platform",
-            y="Posts",
-            color="sentiment",
-            barmode="group",
-            title="Sentiment by Platform"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=430
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# TAB 3 — TOPICS & TRENDS
-# ============================================================
-
-with tabs[2]:
-
-    render_html(
-        """
-        <div class="section-title">
-            🔥 Topics, Hashtags & Trends
-        </div>
-
-        <div class="section-sub">
-            Identify what conversations are gaining
-            attention and which themes are driving engagement.
-        </div>
-        """
-    )
-
-    col1, col2 = st.columns(2)
-
-
-    with col1:
-
-        topic_df = (
-            filtered_df[
-                "topic"
-            ]
-            .value_counts()
-            .reset_index()
-        )
-
-        topic_df.columns = [
-            "Topic",
-            "Posts"
-        ]
-
-        fig = px.bar(
-            topic_df,
-            x="Posts",
-            y="Topic",
-            orientation="h",
-            title="Topic Distribution"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=440
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-    with col2:
-
-        topic_engagement = (
-            filtered_df
-            .groupby(
-                "topic",
-                as_index=False
-            )[
-                "engagement"
-            ]
-            .sum()
-            .sort_values(
-                "engagement",
-                ascending=False
-            )
-        )
-
-        fig = px.bar(
-            topic_engagement,
-            x="topic",
-            y="engagement",
-            title="Engagement by Topic"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=440
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-    # HASHTAGS
-
-    render_html(
-        """
-        <div class="section-title">
-            #️⃣ Trending Hashtags
-        </div>
-        """
-    )
-
-    all_hashtags = []
-
-    for tags in filtered_df[
-        "hashtags"
-    ]:
-
-        all_hashtags.extend(
-            tags
-        )
-
-    if all_hashtags:
-
-        hashtag_df = (
-            pd.Series(
-                all_hashtags,
-                name="Hashtag"
-            )
-            .value_counts()
-            .head(20)
-            .reset_index()
-        )
-
-        hashtag_df.columns = [
-            "Hashtag",
-            "Posts"
-        ]
-
-        fig = px.bar(
-            hashtag_df,
-            x="Posts",
-            y="Hashtag",
-            orientation="h",
-            title="Top 20 Hashtags"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=600
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-    else:
-
-        st.info(
-            "No hashtags were detected in this dataset."
-        )
-
-
-    # TOP TRENDING POSTS
-
-    render_html(
-        """
-        <div class="section-title">
-            🚀 Top Trending Posts
-        </div>
-        """
-    )
-
-    top_posts = (
-        filtered_df
-        .sort_values(
-            "trend_score",
-            ascending=False
-        )
-        .head(10)
-        [
-            [
-                "platform",
-                "text",
-                "sentiment",
-                "emotion",
-                "topic",
-                "engagement",
-                "trend_score_normalized"
-            ]
-        ]
-    )
-
-    top_posts = top_posts.copy()
-
-    top_posts[
-        "trend_score_normalized"
-    ] = top_posts[
-        "trend_score_normalized"
-    ].round(2)
-
-    st.dataframe(
-        top_posts,
-        use_container_width=True,
-        hide_index=True
-    )
-
-
-# ============================================================
-# TAB 4 — PLATFORM COMPARISON
-# ============================================================
-
-with tabs[3]:
-
-    render_html(
-        """
-        <div class="section-title">
-            🌐 Platform Comparison
-        </div>
-
-        <div class="section-sub">
-            Compare how different social platforms
-            perform in terms of conversation,
-            engagement and sentiment.
-        </div>
-        """
-    )
-
-    platform_summary = (
-        filtered_df
-        .groupby(
-            "platform",
-            as_index=False
-        )
-        .agg(
-            Posts=(
-                "text",
-                "count"
-            ),
-            Likes=(
-                "likes",
-                "sum"
-            ),
-            Comments=(
-                "comments",
-                "sum"
-            ),
-            Shares=(
-                "shares",
-                "sum"
-            ),
-            Engagement=(
-                "engagement",
-                "sum"
-            ),
-            Average_Trend=(
-                "trend_score_normalized",
-                "mean"
-            )
-        )
-    )
-
-    platform_summary[
-        "Average_Trend"
-    ] = platform_summary[
-        "Average_Trend"
-    ].round(2)
-
-
-    if len(platform_summary):
-
-        st.dataframe(
-            platform_summary,
-            use_container_width=True,
-            hide_index=True
-        )
-
-
-        col1, col2 = st.columns(2)
-
-
-        with col1:
-
-            fig = px.bar(
-                platform_summary,
-                x="platform",
-                y="Engagement",
-                title="Total Engagement by Platform"
+        with urllib.request.urlopen(
+            url,
+            timeout=30
+        ) as response:
+
+            return json.loads(
+                response.read()
+                .decode("utf-8")
             )
 
-            fig.update_layout(
-                PLOTLY_LAYOUT,
-                height=420
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
-
-
-        with col2:
-
-            fig = px.bar(
-                platform_summary,
-                x="platform",
-                y="Average_Trend",
-                title="Average Trend Index"
-            )
-
-            fig.update_layout(
-                PLOTLY_LAYOUT,
-                height=420
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
-
-
-    # Platform sentiment
-
-    platform_sentiment = (
-        filtered_df
-        .groupby(
-            [
-                "platform",
-                "sentiment"
-            ]
-        )
-        .size()
-        .reset_index(
-            name="Posts"
-        )
-    )
-
-    if len(platform_sentiment):
-
-        fig = px.bar(
-            platform_sentiment,
-            x="platform",
-            y="Posts",
-            color="sentiment",
-            barmode="group",
-            title="Audience Sentiment Across Platforms"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=430
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# TAB 5 — BUSINESS INSIGHTS
-# ============================================================
-
-with tabs[4]:
-
-    render_html(
-        """
-        <div class="section-title">
-            💼 Business Intelligence
-        </div>
-
-        <div class="section-sub">
-            Convert social-media signals into
-            practical decisions for brands,
-            marketers and businesses.
-        </div>
-        """
-    )
-
-    if len(filtered_df):
-
-        sentiment_counts = (
-            filtered_df[
-                "sentiment"
-            ]
-            .value_counts()
-        )
-
-        emotion_counts = (
-            filtered_df[
-                "emotion"
-            ]
-            .value_counts()
-        )
-
-        topic_counts = (
-            filtered_df[
-                "topic"
-            ]
-            .value_counts()
-        )
-
-        platform_counts = (
-            filtered_df[
-                "platform"
-            ]
-            .value_counts()
-        )
-
-
-        dominant_sentiment = (
-            sentiment_counts
-            .index[0]
-            if len(sentiment_counts)
-            else "Unknown"
-        )
-
-        dominant_emotion = (
-            emotion_counts
-            .index[0]
-            if len(emotion_counts)
-            else "Unknown"
-        )
-
-        dominant_topic = (
-            topic_counts
-            .index[0]
-            if len(topic_counts)
-            else "Unknown"
-        )
-
-        strongest_platform = (
-            platform_counts
-            .index[0]
-            if len(platform_counts)
-            else "Unknown"
-        )
-
-
-        # ----------------------------------------------------
-        # INSIGHT 1
-        # ----------------------------------------------------
-
-        render_html(
-            f"""
-            <div class="card">
-
-                <div class="card-title">
-                    🎯 Audience Mood
-                </div>
-
-                <div class="card-text">
-
-                    The dominant sentiment is
-                    <b>{html.escape(dominant_sentiment)}</b>,
-                    while the most common emotion is
-                    <b>{html.escape(dominant_emotion)}</b>.
-
-                    This can help a business understand
-                    the current audience response.
-
-                </div>
-
-            </div>
-            """
-        )
-
-
-        # ----------------------------------------------------
-        # INSIGHT 2
-        # ----------------------------------------------------
-
-        render_html(
-            f"""
-            <div class="card">
-
-                <div class="card-title">
-                    🔥 Conversation Opportunity
-                </div>
-
-                <div class="card-text">
-
-                    The leading conversation theme is
-                    <b>{html.escape(dominant_topic)}</b>.
-
-                    Brands can use this signal to identify
-                    content opportunities, campaigns,
-                    products or messaging aligned with
-                    audience interests.
-
-                </div>
-
-            </div>
-            """
-        )
-
-
-        # ----------------------------------------------------
-        # INSIGHT 3
-        # ----------------------------------------------------
-
-        render_html(
-            f"""
-            <div class="card">
-
-                <div class="card-title">
-                    📱 Strongest Platform
-                </div>
-
-                <div class="card-text">
-
-                    <b>{html.escape(strongest_platform)}</b>
-                    currently has the largest number
-                    of conversations in the filtered dataset.
-
-                    Businesses can compare this with
-                    engagement before deciding where
-                    to prioritize campaigns.
-
-                </div>
-
-            </div>
-            """
-        )
-
-
-        # ----------------------------------------------------
-        # TRENDING OPPORTUNITY
-        # ----------------------------------------------------
-
-        top_trend = (
-            filtered_df
-            .sort_values(
-                "trend_score",
-                ascending=False
-            )
-            .head(1)
-        )
-
-        if len(top_trend):
-
-            post = top_trend.iloc[0]
-
-            render_html(
-                f"""
-                <div class="info-box">
-
-                    <b>🚀 Highest Trend Signal</b><br><br>
-
-                    Platform:
-                    <b>{html.escape(str(post["platform"]))}</b>
-                    <br>
-
-                    Sentiment:
-                    <b>{html.escape(str(post["sentiment"]))}</b>
-                    <br>
-
-                    Topic:
-                    <b>{html.escape(str(post["topic"]))}</b>
-                    <br>
-
-                    Trend Index:
-                    <b>{post["trend_score_normalized"]:.1f}</b>
-
-                </div>
-                """
-            )
-
-
-        # ----------------------------------------------------
-        # ACTIONS
-        # ----------------------------------------------------
-
-        render_html(
-            """
-            <div class="section-title">
-                💡 Recommended Business Actions
-            </div>
-            """
-        )
-
-
-        actions = [
-
-            (
-                "Content Strategy",
-                "Create content around the strongest topics "
-                "and hashtags."
-            ),
-
-            (
-                "Audience Monitoring",
-                "Track negative sentiment and sudden "
-                "emotion changes."
-            ),
-
-            (
-                "Platform Strategy",
-                "Prioritize platforms with stronger "
-                "engagement rather than relying only "
-                "on audience size."
-            ),
-
-            (
-                "Trend Detection",
-                "Monitor high trend-score posts to identify "
-                "emerging conversations early."
-            ),
-
-            (
-                "Campaign Optimization",
-                "Compare platform performance before "
-                "allocating campaign resources."
-            ),
-        ]
-
-
-        for title, description in actions:
-
-            render_html(
-                f"""
-                <div class="card">
-
-                    <div class="card-title">
-                        {html.escape(title)}
-                    </div>
-
-                    <div class="card-text">
-                        {html.escape(description)}
-                    </div>
-
-                </div>
-                """
-            )
-
-
-# ============================================================
-# TAB 6 — MODEL PERFORMANCE
-# ============================================================
-
-with tabs[5]:
-
-    render_html(
-        """
-        <div class="section-title">
-            🧪 Model Performance
-        </div>
-
-        <div class="section-sub">
-            Evaluation metrics for the trained
-            machine-learning models.
-        </div>
-        """
-    )
-
-
-    def evaluate_saved_model(
-        test_path,
-        model_path,
-        vectorizer_path,
-        task
-    ):
-
-        if not all(
-            os.path.exists(path)
-            for path in [
-                test_path,
-                model_path,
-                vectorizer_path
-            ]
-        ):
-
-            return None
+    except urllib.error.HTTPError as error:
 
         try:
 
-            test_df = pd.read_csv(
-                test_path
+            body = (
+                error.read()
+                .decode("utf-8")
             )
 
-            text_col = detect_column(
-                test_df,
-                [
-                    "text",
-                    "tweet",
-                    "content",
-                    "comment",
-                    "post",
-                    "sentence"
-                ]
+            error_json = json.loads(body)
+
+            message = (
+                error_json
+                .get("error", {})
+                .get(
+                    "message",
+                    "YouTube API request failed."
+                )
             )
 
-            label_col = detect_column(
-                test_df,
-                [
-                    "label",
-                    "sentiment",
-                    "emotion",
-                    "target",
-                    "class"
-                ]
+            reason = (
+                error_json
+                .get("error", {})
+                .get("errors", [{}])[0]
+                .get("reason", "")
             )
 
-            if (
-                text_col is None
-                or
-                label_col is None
-            ):
+            if reason:
 
-                return None
-
-            test_df = (
-                test_df[
-                    [
-                        text_col,
-                        label_col
-                    ]
-                ]
-                .dropna()
-            )
-
-            model = joblib.load(
-                model_path
-            )
-
-            vectorizer = joblib.load(
-                vectorizer_path
-            )
-
-            X = vectorizer.transform(
-                test_df[text_col]
-                .astype(str)
-                .apply(clean_text)
-            )
-
-            predictions = (
-                model.predict(X)
-            )
-
-            if task == "sentiment":
-
-                y_true = (
-                    test_df[label_col]
-                    .apply(
-                        normalize_sentiment
-                    )
+                raise RuntimeError(
+                    f"{message} ({reason})"
                 )
 
-                y_pred = (
-                    pd.Series(
-                        predictions
-                    )
-                    .apply(
-                        normalize_sentiment
-                    )
-                )
+            raise RuntimeError(message)
 
-                labels = (
-                    SENTIMENT_ORDER
-                )
+        except json.JSONDecodeError:
 
-            else:
-
-                y_true = (
-                    test_df[label_col]
-                    .apply(
-                        normalize_emotion
-                    )
-                )
-
-                y_pred = (
-                    pd.Series(
-                        predictions
-                    )
-                    .apply(
-                        normalize_emotion
-                    )
-                )
-
-                labels = (
-                    EMOTION_ORDER
-                )
-
-            valid = (
-                y_true.isin(labels)
-                &
-                y_pred.isin(labels)
+            raise RuntimeError(
+                f"YouTube API error "
+                f"HTTP {error.code}"
             )
 
-            y_true = y_true[valid]
-            y_pred = y_pred[valid]
+    except urllib.error.URLError as error:
 
-            if len(y_true) == 0:
-                return None
-
-            accuracy = accuracy_score(
-                y_true,
-                y_pred
-            )
-
-            precision = precision_score(
-                y_true,
-                y_pred,
-                labels=labels,
-                average="weighted",
-                zero_division=0
-            )
-
-            recall = recall_score(
-                y_true,
-                y_pred,
-                labels=labels,
-                average="weighted",
-                zero_division=0
-            )
-
-            f1 = f1_score(
-                y_true,
-                y_pred,
-                labels=labels,
-                average="weighted",
-                zero_division=0
-            )
-
-            f2 = fbeta_score(
-                y_true,
-                y_pred,
-                labels=labels,
-                beta=2,
-                average="weighted",
-                zero_division=0
-            )
-
-            cm = confusion_matrix(
-                y_true,
-                y_pred,
-                labels=labels
-            )
-
-            return {
-                "accuracy": accuracy,
-                "precision": precision,
-                "recall": recall,
-                "f1": f1,
-                "f2": f2,
-                "cm": cm,
-                "labels": labels,
-                "samples": len(y_true),
-            }
-
-        except Exception:
-
-            return None
-
-
-    sentiment_metrics = (
-        evaluate_saved_model(
-            SENTIMENT_TEST_PATH,
-            SENTIMENT_MODEL_PATH,
-            SENTIMENT_VECTOR_PATH,
-            "sentiment"
-        )
-    )
-
-
-    emotion_metrics = (
-        evaluate_saved_model(
-            EMOTION_TEST_PATH,
-            EMOTION_MODEL_PATH,
-            EMOTION_VECTOR_PATH,
-            "emotion"
-        )
-    )
-
-
-    if sentiment_metrics:
-
-        render_html(
-            """
-            <div class="section-title">
-                Sentiment Model
-            </div>
-            """
-        )
-
-        cols = st.columns(5)
-
-        metric_names = [
-            ("Accuracy", "accuracy"),
-            ("Precision", "precision"),
-            ("Recall", "recall"),
-            ("F1 Score", "f1"),
-            ("F2 Score", "f2"),
-        ]
-
-        for col, (
-            label,
-            key
-        ) in zip(
-            cols,
-            metric_names
-        ):
-
-            with col:
-
-                render_html(
-                    kpi_card(
-                        label,
-                        f"{sentiment_metrics[key] * 100:.1f}%",
-                        "Test-set metric"
-                    )
-                )
-
-        cm = sentiment_metrics["cm"]
-
-        fig = px.imshow(
-            cm,
-            text_auto=True,
-            x=sentiment_metrics[
-                "labels"
-            ],
-            y=sentiment_metrics[
-                "labels"
-            ],
-            title="Sentiment Confusion Matrix"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=430
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-    else:
-
-        st.info(
-            "Sentiment evaluation dataset "
-            "is not available."
+        raise RuntimeError(
+            "Could not connect to YouTube API: "
+            + str(error.reason)
         )
 
 
-    if emotion_metrics:
-
-        render_html(
-            """
-            <div class="section-title">
-                Emotion Model
-            </div>
-            """
-        )
-
-        cols = st.columns(5)
-
-        for col, (
-            label,
-            key
-        ) in zip(
-            cols,
-            metric_names
-        ):
-
-            with col:
-
-                render_html(
-                    kpi_card(
-                        label,
-                        f"{emotion_metrics[key] * 100:.1f}%",
-                        "Test-set metric"
-                    )
-                )
-
-        cm = emotion_metrics["cm"]
-
-        fig = px.imshow(
-            cm,
-            text_auto=True,
-            x=emotion_metrics[
-                "labels"
-            ],
-            y=emotion_metrics[
-                "labels"
-            ],
-            title="Emotion Confusion Matrix"
-        )
-
-        fig.update_layout(
-            PLOTLY_LAYOUT,
-            height=480
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-    else:
-
-        st.info(
-            "Emotion evaluation dataset "
-            "is not available."
-        )
-
-
-# ============================================================
-# TAB 7 — POST EXPLORER
-# ============================================================
-
-with tabs[6]:
-
-    render_html(
-        """
-        <div class="section-title">
-            🔎 Post Explorer
-        </div>
-
-        <div class="section-sub">
-            Search and inspect individual posts
-            and their AI-generated intelligence.
-        </div>
-        """
-    )
-
-
-    display_columns = [
-
-        "post_id",
-        "platform",
-        "text",
-        "sentiment",
-        "emotion",
-        "topic",
-        "likes",
-        "comments",
-        "shares",
-        "views",
-        "engagement",
-        "trend_score_normalized",
-        "date"
-    ]
-
-
-    available_columns = [
-        column
-        for column in display_columns
-        if column in filtered_df.columns
-    ]
-
-
-    explorer_df = (
-        filtered_df[
-            available_columns
-        ]
-        .sort_values(
-            "trend_score_normalized",
-            ascending=False
-        )
-    )
-
-
-    st.dataframe(
-        explorer_df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-
-    if len(filtered_df):
-
-        st.markdown(
-            "### 📌 Inspect a Post"
-        )
-
-        selected_index = st.selectbox(
-            "Choose a post",
-            filtered_df.index,
-            format_func=lambda x:
-            str(
-                filtered_df.loc[
-                    x,
-                    "text"
-                ]
-            )[:100]
-        )
-
-        selected = (
-            filtered_df
-            .loc[
-                selected_index
-            ]
-        )
-
-
-        col1, col2 = st.columns(2)
-
-
-        with col1:
-
-            render_html(
-                f"""
-                <div class="card">
-
-                    <div class="card-title">
-                        📝 Post
-                    </div>
-
-                    <div class="card-text">
-                        {html.escape(
-                            str(selected["text"])
-                        )}
-                    </div>
-
-                </div>
-                """
-            )
-
-
-        with col2:
-
-            render_html(
-                f"""
-                <div class="card">
-
-                    <div class="card-title">
-                        🧠 AI Analysis
-                    </div>
-
-                    <div class="card-text">
-
-                        Platform:
-                        <b>{html.escape(str(selected["platform"]))}</b>
-                        <br>
-
-                        Sentiment:
-                        <b>{html.escape(str(selected["sentiment"]))}</b>
-                        <br>
-
-                        Emotion:
-                        <b>{html.escape(str(selected["emotion"]))}</b>
-                        <br>
-
-                        Topic:
-                        <b>{html.escape(str(selected["topic"]))}</b>
-                        <br>
-
-                        Trend Score:
-                        <b>{selected["trend_score_normalized"]:.1f}</b>
-
-                    </div>
-
-                </div>
-                """
-            )
-
-
-# ============================================================
-# REPORT FUNCTIONS
-# ============================================================
-
-def create_excel_report(
-    report_df
+def collect_youtube_data(
+    api_key,
+    query,
+    region_code="IN",
+    max_videos=10,
+    comments_per_video=10,
 ):
 
+    if not api_key:
+
+        raise RuntimeError(
+            "YouTube API key is missing."
+        )
+
+    query = str(query).strip()
+
+    if not query:
+
+        raise RuntimeError(
+            "Please enter a search topic."
+        )
+
+    max_videos = max(
+        1,
+        min(int(max_videos), 20)
+    )
+
+    comments_per_video = max(
+        0,
+        min(int(comments_per_video), 20)
+    )
+
+    # --------------------------------------------------------
+    # SEARCH VIDEOS
+    # --------------------------------------------------------
+
+    search_params = {
+        "part": "snippet",
+        "q": query,
+        "type": "video",
+        "maxResults": max_videos,
+        "order": "relevance",
+        "key": api_key,
+    }
+
+    if region_code != "GLOBAL":
+
+        search_params[
+            "regionCode"
+        ] = region_code
+
+    search_data = youtube_request(
+        "search",
+        search_params
+    )
+
+    search_items = search_data.get(
+        "items",
+        []
+    )
+
+    if not search_items:
+
+        raise RuntimeError(
+            f"No YouTube videos found for "
+            f"'{query}'."
+        )
+
+    video_ids = []
+
+    for item in search_items:
+
+        video_id = (
+            item
+            .get("id", {})
+            .get("videoId")
+        )
+
+        if video_id:
+
+            video_ids.append(
+                video_id
+            )
+
+    if not video_ids:
+
+        raise RuntimeError(
+            "No valid YouTube video IDs returned."
+        )
+
+    # --------------------------------------------------------
+    # VIDEO DETAILS
+    # --------------------------------------------------------
+
+    video_data = youtube_request(
+        "videos",
+        {
+            "part": (
+                "snippet,statistics"
+            ),
+            "id": ",".join(video_ids),
+            "key": api_key,
+        },
+    )
+
+    rows = []
+
+    for video in video_data.get(
+        "items",
+        []
+    ):
+
+        video_id = video.get(
+            "id",
+            ""
+        )
+
+        snippet = video.get(
+            "snippet",
+            {}
+        )
+
+        statistics = video.get(
+            "statistics",
+            {}
+        )
+
+        title = snippet.get(
+            "title",
+            ""
+        )
+
+        description = snippet.get(
+            "description",
+            ""
+        )
+
+        text = (
+            f"{title} {description}"
+        ).strip()
+
+        rows.append({
+            "post_id": video_id,
+            "platform": "YouTube",
+            "post_type": "video",
+            "text": text,
+            "date": snippet.get(
+                "publishedAt",
+                ""
+            ),
+            "likes": parse_metric(
+                statistics.get(
+                    "likeCount",
+                    0
+                )
+            ),
+            "comments": parse_metric(
+                statistics.get(
+                    "commentCount",
+                    0
+                )
+            ),
+            "shares": 0,
+            "views": parse_metric(
+                statistics.get(
+                    "viewCount",
+                    0
+                )
+            ),
+            "hashtags": extract_hashtags(
+                text
+            ),
+            "author": snippet.get(
+                "channelTitle",
+                ""
+            ),
+            "author_followers": 0,
+            "language": snippet.get(
+                "defaultLanguage",
+                "Unknown"
+            ),
+            "source_url": (
+                "https://www.youtube.com/watch?v="
+                + video_id
+            ),
+        })
+
+    # --------------------------------------------------------
+    # COMMENTS
+    # --------------------------------------------------------
+
+    for video_id in video_ids:
+
+        if comments_per_video <= 0:
+            break
+
+        try:
+
+            comment_data = youtube_request(
+                "commentThreads",
+                {
+                    "part": "snippet",
+                    "videoId": video_id,
+                    "maxResults": comments_per_video,
+                    "order": "relevance",
+                    "textFormat": "plainText",
+                    "key": api_key,
+                },
+            )
+
+        except RuntimeError as error:
+
+            error_text = str(error).lower()
+
+            if (
+                "disabled" in error_text
+                or "forbidden" in error_text
+                or "commentsdisabled" in error_text
+            ):
+
+                continue
+
+            raise
+
+        for item in comment_data.get(
+            "items",
+            []
+        ):
+
+            comment = (
+                item
+                .get("snippet", {})
+                .get(
+                    "topLevelComment",
+                    {}
+                )
+            )
+
+            snippet = comment.get(
+                "snippet",
+                {}
+            )
+
+            comment_id = comment.get(
+                "id",
+                ""
+            )
+
+            comment_text = snippet.get(
+                "textDisplay",
+                ""
+            )
+
+            if not comment_text:
+                continue
+
+            rows.append({
+                "post_id": comment_id,
+                "platform": "YouTube",
+                "post_type": "comment",
+                "text": comment_text,
+                "date": snippet.get(
+                    "publishedAt",
+                    ""
+                ),
+                "likes": parse_metric(
+                    snippet.get(
+                        "likeCount",
+                        0
+                    )
+                ),
+                "comments": 0,
+                "shares": 0,
+                "views": 0,
+                "hashtags": extract_hashtags(
+                    comment_text
+                ),
+                "author": snippet.get(
+                    "authorDisplayName",
+                    ""
+                ),
+                "author_followers": 0,
+                "language": "Unknown",
+                "source_url": (
+                    "https://www.youtube.com/watch?v="
+                    + video_id
+                ),
+            })
+
+    result = pd.DataFrame(rows)
+
+    if result.empty:
+
+        raise RuntimeError(
+            "YouTube returned no usable records."
+        )
+
+    return result
+
+
+# ============================================================
+# EXCEL REPORT
+# ============================================================
+def create_excel_report(report_df):
     output = io.BytesIO()
 
     if report_df is None:
-
         report_df = pd.DataFrame()
 
-    report_df = (
-        report_df.copy()
-    )
+    report_df = report_df.copy()
 
-    if (
-        report_df.empty
-        and
-        len(report_df.columns) == 0
-    ):
-
+    if report_df.empty and len(report_df.columns) == 0:
         report_df = pd.DataFrame({
-            "Message": [
-                "No report data available."
-            ]
+            "Message": ["No report data available."]
         })
 
+    # ---------------------------------------------------------
+    # EXCEL FIX:
+    # Convert ALL timezone-aware datetime values to plain text
+    # ---------------------------------------------------------
+    for column in report_df.columns:
+
+        def excel_safe_value(value):
+            try:
+                # Pandas Timestamp
+                if isinstance(value, pd.Timestamp):
+                    return value.strftime("%Y-%m-%d %H:%M:%S")
+
+                # Python datetime/date/time objects
+                if hasattr(value, "tzinfo"):
+                    if value.tzinfo is not None:
+                        return value.replace(tzinfo=None).strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+
+                return value
+
+            except Exception:
+                return str(value)
+
+        report_df[column] = report_df[column].map(excel_safe_value)
+
+    # ---------------------------------------------------------
+    # FINAL SAFETY:
+    # Convert date/time columns explicitly to strings
+    # ---------------------------------------------------------
+    for column in report_df.columns:
+        column_name = str(column).lower()
+
+        if any(word in column_name for word in [
+            "date",
+            "time",
+            "timestamp",
+            "created",
+            "published"
+        ]):
+            report_df[column] = report_df[column].astype(str)
+
+    # ---------------------------------------------------------
+    # CREATE EXCEL
+    # ---------------------------------------------------------
     with pd.ExcelWriter(
         output,
         engine="openpyxl"
@@ -3569,16 +1446,15 @@ def create_excel_report(
 
     return output.getvalue()
 
+# ============================================================
+# PDF REPORT
+# ============================================================
 
-def create_pdf_report(
-    report_df
-):
+def create_pdf_report(df):
 
     try:
 
-        from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.platypus import (
             SimpleDocTemplate,
             Paragraph,
@@ -3586,26 +1462,21 @@ def create_pdf_report(
             Table,
             TableStyle,
         )
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet
 
     except Exception:
 
         return None
 
-
     output = io.BytesIO()
 
     document = SimpleDocTemplate(
         output,
-        pagesize=A4,
-        rightMargin=30,
-        leftMargin=30,
-        topMargin=30,
-        bottomMargin=30
+        pagesize=A4
     )
 
-    styles = (
-        getSampleStyleSheet()
-    )
+    styles = getSampleStyleSheet()
 
     story = []
 
@@ -3617,127 +1488,1437 @@ def create_pdf_report(
     )
 
     story.append(
-        Spacer(
-            1,
-            15
-        )
+        Spacer(1, 15)
     )
 
     story.append(
         Paragraph(
-            "AI-powered social-media intelligence report.",
+            f"Records analyzed: {len(df):,}",
             styles["BodyText"]
         )
     )
 
     story.append(
-        Spacer(
-            1,
-            15
-        )
+        Spacer(1, 10)
     )
 
+    if "sentiment" in df.columns:
 
-    if report_df is None:
-        report_df = pd.DataFrame()
-
-
-    if len(report_df):
-
-        small_df = (
-            report_df
-            .head(50)
-            .copy()
+        sentiment_counts = (
+            df["sentiment"]
+            .value_counts()
         )
 
-        small_df = small_df.fillna("")
-
-        headers = list(
-            small_df.columns
-        )
-
-        data = [
-            headers
+        table_data = [
+            ["Sentiment", "Records"]
         ]
 
-        for _, row in small_df.iterrows():
+        for label in SENTIMENT_ORDER:
 
-            data.append(
-                [
-                    str(
-                        value
-                    )[:80]
-                    for value
-                    in row.tolist()
-                ]
-            )
+            table_data.append([
+                label,
+                str(
+                    sentiment_counts.get(
+                        label,
+                        0
+                    )
+                )
+            ])
 
         table = Table(
-            data,
-            repeatRows=1
+            table_data
         )
 
         table.setStyle(
-            TableStyle(
-                [
-                    (
-                        "BACKGROUND",
-                        (0, 0),
-                        (-1, 0),
-                        colors.HexColor(
-                            "#6d28d9"
-                        )
-                    ),
-                    (
-                        "TEXTCOLOR",
-                        (0, 0),
-                        (-1, 0),
-                        colors.white
-                    ),
-                    (
-                        "GRID",
-                        (0, 0),
-                        (-1, -1),
-                        0.4,
-                        colors.grey
-                    ),
-                    (
-                        "FONTSIZE",
-                        (0, 0),
-                        (-1, -1),
-                        7
-                    ),
-                    (
-                        "VALIGN",
-                        (0, 0),
-                        (-1, -1),
-                        "TOP"
-                    ),
-                ]
-            )
+            TableStyle([
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.lightgrey
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.5,
+                    colors.grey
+                ),
+                (
+                    "PADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6
+                ),
+            ])
         )
 
-        story.append(
-            table
-        )
+        story.append(table)
 
-    else:
-
-        story.append(
-            Paragraph(
-                "No report data available.",
-                styles["BodyText"]
-            )
-        )
-
-
-    document.build(
-        story
-    )
+    document.build(story)
 
     output.seek(0)
 
     return output.getvalue()
+
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+
+if "youtube_live_df" not in st.session_state:
+
+    st.session_state[
+        "youtube_live_df"
+    ] = None
+
+if "youtube_query" not in st.session_state:
+
+    st.session_state[
+        "youtube_query"
+    ] = ""
+
+
+# ============================================================
+# PREMIUM LIGHT UI
+# ============================================================
+
+render_html("""
+<style>
+
+.stApp {
+    background:
+        radial-gradient(
+            circle at 10% 0%,
+            rgba(139,92,246,.08),
+            transparent 30%
+        ),
+        radial-gradient(
+            circle at 90% 10%,
+            rgba(59,130,246,.07),
+            transparent 28%
+        ),
+        #f8f9fc;
+}
+
+section[data-testid="stSidebar"] {
+    background: #ffffff;
+    border-right: 1px solid #ececf3;
+}
+
+h1, h2, h3 {
+    letter-spacing: -0.03em;
+}
+
+div[data-testid="stMetric"] {
+    background: white;
+    border: 1px solid #ececf3;
+    border-radius: 16px;
+    padding: 14px;
+}
+
+.stButton > button {
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+.stDownloadButton > button {
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+</style>
+""")
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+with st.sidebar:
+
+    st.markdown(
+        "# 📊 TrendSense AI"
+    )
+
+    st.caption(
+        "AI-powered social intelligence"
+    )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # DATA SOURCE
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### 📂 Data Source"
+    )
+
+    source = st.radio(
+        "Choose data",
+        [
+            "Demo Dataset",
+            "Upload CSV",
+            "🔴 Live YouTube",
+        ],
+    )
+
+    uploaded_file = None
+
+    if source == "Upload CSV":
+
+        uploaded_file = st.file_uploader(
+            "Upload social media CSV",
+            type=["csv"]
+        )
+
+    elif source == "🔴 Live YouTube":
+
+        st.markdown(
+            "#### 🔴 YouTube Collector"
+        )
+
+        youtube_query = st.text_input(
+            "🔎 Search topic",
+            value="artificial intelligence"
+        )
+
+        youtube_region = st.selectbox(
+            "🌍 Region",
+            [
+                "India",
+                "United States",
+                "United Kingdom",
+                "Global",
+            ],
+        )
+
+        region_map = {
+            "India": "IN",
+            "United States": "US",
+            "United Kingdom": "GB",
+            "Global": "GLOBAL",
+        }
+
+        youtube_region_code = region_map[
+            youtube_region
+        ]
+
+        youtube_video_count = st.slider(
+            "📊 Number of videos",
+            1,
+            20,
+            10,
+        )
+
+        youtube_comments_per_video = st.slider(
+            "💬 Comments per video",
+            0,
+            20,
+            10,
+        )
+
+        collect_button = st.button(
+            "🚀 Collect YouTube Data",
+            width="stretch",
+        )
+
+        if collect_button:
+
+            api_key = get_youtube_api_key()
+
+            if not api_key:
+
+                st.error(
+                    "YouTube API key not found. "
+                    "Check .streamlit/secrets.toml."
+                )
+
+            else:
+
+                try:
+
+                    with st.spinner(
+                        "🔴 Collecting current YouTube data..."
+                    ):
+
+                        live_df = collect_youtube_data(
+                            api_key=api_key,
+                            query=youtube_query,
+                            region_code=youtube_region_code,
+                            max_videos=youtube_video_count,
+                            comments_per_video=(
+                                youtube_comments_per_video
+                            ),
+                        )
+
+                    st.session_state[
+                        "youtube_live_df"
+                    ] = live_df
+
+                    st.session_state[
+                        "youtube_query"
+                    ] = youtube_query
+
+                    st.success(
+                        f"Collected "
+                        f"{len(live_df):,} records."
+                    )
+
+                except Exception as error:
+
+                    st.error(
+                        f"YouTube collection failed: "
+                        f"{error}"
+                    )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # FILTERS
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### 🔎 Filters"
+    )
+
+    search_text = st.text_input(
+        "Search posts",
+        placeholder="Search keywords..."
+    )
+
+    sentiment_filter = st.multiselect(
+        "Sentiment",
+        SENTIMENT_ORDER,
+        default=[]
+    )
+
+    emotion_filter = st.multiselect(
+        "Emotion",
+        EMOTION_ORDER,
+        default=[]
+    )
+
+    minimum_likes = st.number_input(
+        "Minimum likes",
+        min_value=0,
+        value=0,
+        step=10,
+    )
+
+
+# ============================================================
+# DATA LOADING
+# ============================================================
+
+if source == "🔴 Live YouTube":
+
+    if (
+        st.session_state[
+            "youtube_live_df"
+        ] is None
+    ):
+
+        st.info(
+            "👆 Enter a YouTube topic and click "
+            "'Collect YouTube Data' to start."
+        )
+
+        st.stop()
+
+    raw_df = st.session_state[
+        "youtube_live_df"
+    ].copy()
+
+    query_name = st.session_state.get(
+        "youtube_query",
+        "YouTube"
+    )
+
+    filename = "live_youtube.csv"
+
+    data_source_label = (
+        f"🔴 YouTube • {query_name}"
+    )
+
+elif (
+    source == "Upload CSV"
+    and uploaded_file is not None
+):
+
+    raw_df = pd.read_csv(
+        uploaded_file
+    )
+
+    filename = uploaded_file.name
+
+    data_source_label = filename
+
+else:
+
+    if not os.path.exists(
+        DATA_PATH
+    ):
+
+        st.error(
+            "Demo dataset not found."
+        )
+
+        st.stop()
+
+    raw_df = pd.read_csv(
+        DATA_PATH
+    )
+
+    filename = "social_media.csv"
+
+    data_source_label = "Demo Dataset"
+
+
+# ============================================================
+# STANDARDIZE + AI
+# ============================================================
+
+df = standardize_social_data(
+    raw_df
+)
+
+with st.spinner(
+    "🧠 Running TrendSense AI analysis..."
+):
+
+    df = run_ai_analysis(
+        df
+    )
+
+
+# ============================================================
+# FILTER DATA
+# ============================================================
+
+filtered_df = df.copy()
+
+if search_text:
+
+    mask = (
+        filtered_df["text"]
+        .str.contains(
+            search_text,
+            case=False,
+            na=False
+        )
+    )
+
+    filtered_df = filtered_df[
+        mask
+    ]
+
+if sentiment_filter:
+
+    filtered_df = filtered_df[
+        filtered_df["sentiment"]
+        .isin(sentiment_filter)
+    ]
+
+if emotion_filter:
+
+    filtered_df = filtered_df[
+        filtered_df["emotion"]
+        .isin(emotion_filter)
+    ]
+
+filtered_df = filtered_df[
+    filtered_df["likes"]
+    >= minimum_likes
+]
+
+
+# ============================================================
+# HERO
+# ============================================================
+
+render_html(f"""
+<div style="
+    background:
+        linear-gradient(
+            135deg,
+            #ffffff 0%,
+            #f5f3ff 45%,
+            #eef6ff 100%
+        );
+    border:1px solid #e8e5f5;
+    border-radius:26px;
+    padding:34px;
+    margin-bottom:25px;
+">
+
+    <div style="
+        display:inline-block;
+        padding:7px 12px;
+        background:#ede9fe;
+        color:#6d28d9;
+        border-radius:999px;
+        font-size:12px;
+        font-weight:800;
+        margin-bottom:14px;
+    ">
+        AI-POWERED SOCIAL INTELLIGENCE
+    </div>
+
+    <h1 style="
+        font-size:44px;
+        margin:0;
+        color:#111827;
+    ">
+        TrendSense AI
+    </h1>
+
+    <p style="
+        font-size:17px;
+        color:#5b6474;
+        margin-top:10px;
+        max-width:800px;
+    ">
+        Transform social media data into actionable
+        sentiment, emotion, topic and trend intelligence.
+    </p>
+
+    <div style="
+        margin-top:16px;
+        font-size:13px;
+        color:#6b7280;
+    ">
+        📂 Source: <b>{html.escape(data_source_label)}</b>
+        &nbsp;&nbsp;•&nbsp;&nbsp;
+        🧠 NLP analyzed
+        &nbsp;&nbsp;•&nbsp;&nbsp;
+        📊 Business-ready insights
+    </div>
+
+</div>
+""")
+
+
+# ============================================================
+# PIPELINE
+# ============================================================
+
+st.markdown(
+    "### 🔄 TrendSense Intelligence Pipeline"
+)
+
+pipeline_cols = st.columns(7)
+
+pipeline_steps = [
+    ("📥", "Data"),
+    ("🔍", "Platform"),
+    ("💭", "Sentiment"),
+    ("❤️", "Emotion"),
+    ("🧠", "Topics"),
+    ("🔥", "Trends"),
+    ("💼", "Insights"),
+]
+
+for col, (icon, label) in zip(
+    pipeline_cols,
+    pipeline_steps
+):
+
+    with col:
+
+        st.markdown(
+            f"""
+            <div style="
+                background:white;
+                border:1px solid #ececf3;
+                border-radius:14px;
+                padding:13px 8px;
+                text-align:center;
+                font-size:12px;
+                font-weight:700;
+            ">
+                <div style="font-size:20px;">
+                    {icon}
+                </div>
+                {label}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+st.divider()
+
+
+# ============================================================
+# DATA STATUS
+# ============================================================
+
+st.markdown(
+    f"**Dataset:** `{filename}`"
+)
+
+st.caption(
+    f"{len(filtered_df):,} records shown "
+    f"out of {len(df):,} total records."
+)
+
+
+# ============================================================
+# KPI
+# ============================================================
+
+total_records = len(filtered_df)
+
+total_likes = (
+    filtered_df["likes"].sum()
+)
+
+total_comments = (
+    filtered_df["comments"].sum()
+)
+
+total_views = (
+    filtered_df["views"].sum()
+)
+
+avg_engagement = (
+    filtered_df["engagement"].mean()
+    if len(filtered_df)
+    else 0
+)
+
+positive_percentage = (
+    (
+        filtered_df["sentiment"]
+        .eq("Positive")
+        .mean()
+        * 100
+    )
+    if len(filtered_df)
+    else 0
+)
+
+kpis = st.columns(5)
+
+with kpis[0]:
+
+    render_html(
+        kpi_card(
+            "Records",
+            compact_number(
+                total_records
+            ),
+            "Analyzed posts/comments"
+        )
+    )
+
+with kpis[1]:
+
+    render_html(
+        kpi_card(
+            "Likes",
+            compact_number(
+                total_likes
+            ),
+            "Total likes"
+        )
+    )
+
+with kpis[2]:
+
+    render_html(
+        kpi_card(
+            "Comments",
+            compact_number(
+                total_comments
+            ),
+            "Total comments"
+        )
+    )
+
+with kpis[3]:
+
+    render_html(
+        kpi_card(
+            "Views",
+            compact_number(
+                total_views
+            ),
+            "Total views"
+        )
+    )
+
+with kpis[4]:
+
+    render_html(
+        kpi_card(
+            "Positive",
+            f"{positive_percentage:.1f}%",
+            "Positive sentiment"
+        )
+    )
+
+
+st.markdown("")
+
+
+# ============================================================
+# TABS
+# ============================================================
+
+tabs = st.tabs([
+    "📊 Overview",
+    "💭 Sentiment & Emotion",
+    "🔥 Topics & Trends",
+    "🌐 Platform Comparison",
+    "💼 Business Insights",
+    "🧪 Model Performance",
+    "🔎 Post Explorer",
+    "📄 Reports",
+])
+
+
+# ============================================================
+# TAB 1 — OVERVIEW
+# ============================================================
+
+with tabs[0]:
+
+    st.subheader(
+        "Social Intelligence Overview"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        sentiment_counts = (
+            filtered_df["sentiment"]
+            .value_counts()
+            .reindex(
+                SENTIMENT_ORDER,
+                fill_value=0
+            )
+            .reset_index()
+        )
+
+        sentiment_counts.columns = [
+            "Sentiment",
+            "Count"
+        ]
+
+        fig = px.bar(
+            sentiment_counts,
+            x="Sentiment",
+            y="Count",
+            title="Sentiment Distribution",
+            text="Count",
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=380,
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    with col2:
+
+        emotion_counts = (
+            filtered_df["emotion"]
+            .value_counts()
+            .reindex(
+                EMOTION_ORDER,
+                fill_value=0
+            )
+            .reset_index()
+        )
+
+        emotion_counts.columns = [
+            "Emotion",
+            "Count"
+        ]
+
+        fig = px.bar(
+            emotion_counts,
+            x="Emotion",
+            y="Count",
+            title="Emotion Distribution",
+            text="Count",
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=380,
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    if (
+        "date" in filtered_df.columns
+        and filtered_df["date"].notna().any()
+    ):
+
+        daily = (
+            filtered_df
+            .dropna(subset=["date"])
+            .assign(
+                day=lambda x:
+                x["date"].dt.date
+            )
+            .groupby("day")
+            .size()
+            .reset_index(
+                name="Posts"
+            )
+        )
+
+        fig = px.line(
+            daily,
+            x="day",
+            y="Posts",
+            markers=True,
+            title="Activity Over Time",
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=360,
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+
+# ============================================================
+# TAB 2 — SENTIMENT & EMOTION
+# ============================================================
+
+with tabs[1]:
+
+    st.subheader(
+        "Sentiment & Emotion Intelligence"
+    )
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        sentiment = (
+            filtered_df["sentiment"]
+            .value_counts()
+            .reindex(
+                SENTIMENT_ORDER,
+                fill_value=0
+            )
+            .reset_index()
+        )
+
+        sentiment.columns = [
+            "Sentiment",
+            "Count"
+        ]
+
+        fig = px.pie(
+            sentiment,
+            names="Sentiment",
+            values="Count",
+            hole=0.45,
+            title="Sentiment Mix",
+        )
+
+        fig.update_layout(
+            height=400
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    with c2:
+
+        emotion = (
+            filtered_df["emotion"]
+            .value_counts()
+            .reindex(
+                EMOTION_ORDER,
+                fill_value=0
+            )
+            .reset_index()
+        )
+
+        emotion.columns = [
+            "Emotion",
+            "Count"
+        ]
+
+        fig = px.pie(
+            emotion,
+            names="Emotion",
+            values="Count",
+            hole=0.45,
+            title="Emotion Mix",
+        )
+
+        fig.update_layout(
+            height=400
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    st.markdown(
+        "### Sentiment by Platform"
+    )
+
+    platform_sentiment = (
+        filtered_df
+        .groupby(
+            ["platform", "sentiment"]
+        )
+        .size()
+        .reset_index(
+            name="Count"
+        )
+    )
+
+    if not platform_sentiment.empty:
+
+        fig = px.bar(
+            platform_sentiment,
+            x="platform",
+            y="Count",
+            color="sentiment",
+            barmode="group",
+            title="Sentiment Across Platforms",
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=400,
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+
+# ============================================================
+# TAB 3 — TOPICS & TRENDS
+# ============================================================
+
+with tabs[2]:
+
+    st.subheader(
+        "Topics & Trending Content"
+    )
+
+    topic_counts = (
+        filtered_df["topic"]
+        .value_counts()
+        .reset_index()
+    )
+
+    topic_counts.columns = [
+        "Topic",
+        "Count"
+    ]
+
+    fig = px.bar(
+        topic_counts,
+        x="Count",
+        y="Topic",
+        orientation="h",
+        text="Count",
+        title="Top Topics",
+    )
+
+    fig.update_layout(
+        template="plotly_white",
+        height=420,
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+    st.markdown(
+        "### 🔥 Trending Posts"
+    )
+
+    trending = (
+        filtered_df
+        .sort_values(
+            "trend_score",
+            ascending=False
+        )
+        .head(10)
+        .copy()
+    )
+
+    display_cols = [
+        "platform",
+        "post_type",
+        "text",
+        "sentiment",
+        "emotion",
+        "topic",
+        "trend_score",
+        "likes",
+        "comments",
+        "views",
+    ]
+
+    display_cols = [
+        col for col in display_cols
+        if col in trending.columns
+    ]
+
+    st.dataframe(
+        trending[display_cols],
+        width="stretch",
+        hide_index=True,
+    )
+
+    # --------------------------------------------------------
+    # HASHTAGS
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### #️⃣ Trending Hashtags"
+    )
+
+    all_hashtags = []
+
+    for value in filtered_df[
+        "hashtags"
+    ].dropna():
+
+        tags = re.findall(
+            r"#?[A-Za-z0-9_]+",
+            str(value)
+        )
+
+        for tag in tags:
+
+            tag = tag.strip()
+
+            if not tag:
+                continue
+
+            if not tag.startswith("#"):
+                tag = "#" + tag
+
+            all_hashtags.append(
+                tag.lower()
+            )
+
+    if all_hashtags:
+
+        hashtag_counts = (
+            pd.Series(all_hashtags)
+            .value_counts()
+            .head(20)
+            .reset_index()
+        )
+
+        hashtag_counts.columns = [
+            "Hashtag",
+            "Count"
+        ]
+
+        fig = px.bar(
+            hashtag_counts,
+            x="Count",
+            y="Hashtag",
+            orientation="h",
+            title="Most Frequent Hashtags",
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=500,
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    else:
+
+        st.info(
+            "No hashtags available in this dataset."
+        )
+
+
+# ============================================================
+# TAB 4 — PLATFORM COMPARISON
+# ============================================================
+
+with tabs[3]:
+
+    st.subheader(
+        "🌐 Platform Comparison"
+    )
+
+    platform_summary = (
+        filtered_df
+        .groupby("platform")
+        .agg(
+            Posts=("post_id", "count"),
+            Likes=("likes", "sum"),
+            Comments=("comments", "sum"),
+            Shares=("shares", "sum"),
+            Views=("views", "sum"),
+            Avg_Engagement=(
+                "engagement",
+                "mean"
+            ),
+        )
+        .reset_index()
+    )
+
+    st.dataframe(
+        platform_summary,
+        width="stretch",
+        hide_index=True,
+    )
+
+    if not platform_summary.empty:
+
+        fig = px.bar(
+            platform_summary,
+            x="platform",
+            y="Likes",
+            title="Likes by Platform",
+            text="Likes",
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=400,
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+        fig = px.bar(
+            platform_summary,
+            x="platform",
+            y="Avg_Engagement",
+            title="Average Engagement by Platform",
+            text="Avg_Engagement",
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=400,
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+
+# ============================================================
+# TAB 5 — BUSINESS INSIGHTS
+# ============================================================
+
+with tabs[4]:
+
+    st.subheader(
+        "💼 Business Intelligence"
+    )
+
+    if len(filtered_df):
+
+        top_post = (
+            filtered_df
+            .sort_values(
+                "trend_score",
+                ascending=False
+            )
+            .iloc[0]
+        )
+
+        dominant_sentiment = (
+            filtered_df["sentiment"]
+            .value_counts()
+            .idxmax()
+        )
+
+        dominant_emotion = (
+            filtered_df["emotion"]
+            .value_counts()
+            .idxmax()
+        )
+
+        dominant_topic = (
+            filtered_df["topic"]
+            .value_counts()
+            .idxmax()
+        )
+
+        insights = [
+            (
+                "🔥 Top Trend",
+                f"The strongest trending content "
+                f"belongs to: {dominant_topic}."
+            ),
+            (
+                "💭 Audience Sentiment",
+                f"The dominant audience sentiment "
+                f"is {dominant_sentiment}."
+            ),
+            (
+                "❤️ Audience Emotion",
+                f"The dominant detected emotion "
+                f"is {dominant_emotion}."
+            ),
+            (
+                "📈 Best Content",
+                f"The highest trend-score content "
+                f"has a score of "
+                f"{top_post['trend_score']:.1f}."
+            ),
+        ]
+
+        for title, message in insights:
+
+            st.markdown(
+                f"""
+                <div style="
+                    background:white;
+                    border:1px solid #ececf3;
+                    border-radius:16px;
+                    padding:18px;
+                    margin-bottom:12px;
+                ">
+                    <b>{title}</b>
+                    <div style="
+                        margin-top:7px;
+                        color:#596273;
+                    ">
+                        {html.escape(message)}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            "### 🎯 Recommended Business Actions"
+        )
+
+        actions = []
+
+        if dominant_sentiment == "Positive":
+
+            actions.append(
+                "Use positive audience reactions "
+                "in marketing campaigns."
+            )
+
+        elif dominant_sentiment == "Negative":
+
+            actions.append(
+                "Investigate negative themes and "
+                "prioritize customer feedback."
+            )
+
+        else:
+
+            actions.append(
+                "Create content designed to move "
+                "neutral audiences toward engagement."
+            )
+
+        actions.extend([
+            (
+                f"Prioritize the topic "
+                f"'{dominant_topic}' "
+                "for future content."
+            ),
+            (
+                "Monitor rapidly increasing "
+                "engagement to identify emerging trends."
+            ),
+            (
+                "Compare platforms before allocating "
+                "marketing resources."
+            ),
+        ])
+
+        for action in actions:
+
+            st.markdown(
+                f"- {action}"
+            )
+
+    else:
+
+        st.info(
+            "No records match the current filters."
+        )
+
+
+# ============================================================
+# TAB 6 — MODEL PERFORMANCE
+# ============================================================
+
+with tabs[5]:
+
+    st.subheader(
+        "🧪 Model Performance"
+    )
+
+    st.caption(
+        "Confidence scores below indicate the model's "
+        "prediction confidence for the analyzed records."
+    )
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+
+        avg_sentiment_confidence = (
+            filtered_df[
+                "sentiment_confidence"
+            ].mean()
+            if len(filtered_df)
+            else 0
+        )
+
+        st.metric(
+            "Sentiment Confidence",
+            f"{avg_sentiment_confidence * 100:.1f}%"
+        )
+
+    with c2:
+
+        avg_emotion_confidence = (
+            filtered_df[
+                "emotion_confidence"
+            ].mean()
+            if len(filtered_df)
+            else 0
+        )
+
+        st.metric(
+            "Emotion Confidence",
+            f"{avg_emotion_confidence * 100:.1f}%"
+        )
+
+    with c3:
+
+        avg_topic_confidence = (
+            filtered_df[
+                "topic_confidence"
+            ].mean()
+            if len(filtered_df)
+            else 0
+        )
+
+        st.metric(
+            "Topic Confidence",
+            f"{avg_topic_confidence * 100:.1f}%"
+        )
+
+    confidence_df = pd.DataFrame({
+        "Model": [
+            "Sentiment",
+            "Emotion",
+            "Topic",
+        ],
+        "Confidence": [
+            avg_sentiment_confidence * 100,
+            avg_emotion_confidence * 100,
+            avg_topic_confidence * 100,
+        ],
+    })
+
+    fig = px.bar(
+        confidence_df,
+        x="Model",
+        y="Confidence",
+        text="Confidence",
+        title="Average Model Confidence",
+    )
+
+    fig.update_yaxes(
+        range=[0, 100]
+    )
+
+    fig.update_layout(
+        template="plotly_white",
+        height=400,
+    )
+
+    st.plotly_chart(
+        fig,
+        width="stretch"
+    )
+
+
+# ============================================================
+# TAB 7 — POST EXPLORER
+# ============================================================
+
+with tabs[6]:
+
+    st.subheader(
+        "🔎 Post Explorer"
+    )
+
+    explorer_cols = [
+        "post_id",
+        "platform",
+        "post_type",
+        "text",
+        "sentiment",
+        "emotion",
+        "topic",
+        "trend_score",
+        "likes",
+        "comments",
+        "shares",
+        "views",
+        "author",
+        "source_url",
+    ]
+
+    explorer_cols = [
+        col
+        for col in explorer_cols
+        if col in filtered_df.columns
+    ]
+
+    st.dataframe(
+        filtered_df[
+            explorer_cols
+        ],
+        width="stretch",
+        hide_index=True,
+    )
 
 
 # ============================================================
@@ -3746,150 +2927,116 @@ def create_pdf_report(
 
 with tabs[7]:
 
-    render_html(
-        """
-        <div class="section-title">
-            📄 TrendSense Reports
-        </div>
-
-        <div class="section-sub">
-            Export your analyzed dataset and
-            business intelligence results.
-        </div>
-        """
+    st.subheader(
+        "📄 Reports & Export"
     )
 
-
-    report_columns = [
-
+    report_cols = [
         "post_id",
         "platform",
-        "date",
+        "post_type",
         "text",
-        "sentiment",
-        "emotion",
-        "topic",
+        "date",
         "likes",
         "comments",
         "shares",
         "views",
-        "engagement",
-        "engagement_rate",
-        "trend_score_normalized"
+        "sentiment",
+        "sentiment_confidence",
+        "emotion",
+        "emotion_confidence",
+        "topic",
+        "topic_confidence",
+        "trend_score",
+        "source_url",
     ]
 
-
-    report_columns = [
-        column
-        for column in report_columns
-        if column in filtered_df.columns
+    report_cols = [
+        col
+        for col in report_cols
+        if col in filtered_df.columns
     ]
 
+    report_df = filtered_df[
+        report_cols
+    ].copy()
 
-    report_df = (
-        filtered_df[
-            report_columns
-        ]
-        .copy()
-    )
+    c1, c2, c3 = st.columns(3)
 
+    with c1:
 
-    col1, col2 = st.columns(2)
+        csv_data = report_df.to_csv(
+            index=False
+        ).encode("utf-8")
 
+        st.download_button(
+            "⬇️ Download CSV",
+            csv_data,
+            file_name="trendsense_report.csv",
+            mime="text/csv",
+            width="stretch",
+        )
 
-    with col1:
+    with c2:
 
-        excel_bytes = (
-            create_excel_report(
-                report_df
-            )
+        excel_data = create_excel_report(
+            report_df
         )
 
         st.download_button(
-            label="📊 Download Excel Report",
-            data=excel_bytes,
-            file_name=(
-                "TrendSense_Report.xlsx"
-            ),
+            "📊 Download Excel",
+            excel_data,
+            file_name="trendsense_report.xlsx",
             mime=(
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
+                "application/vnd.openxmlformats-"
+                "officedocument.spreadsheetml.sheet"
             ),
-            use_container_width=True
+            width="stretch",
         )
 
+    with c3:
 
-    with col2:
-
-        pdf_bytes = (
-            create_pdf_report(
-                report_df
-            )
+        pdf_data = create_pdf_report(
+            report_df
         )
 
-        if pdf_bytes:
+        if pdf_data:
 
             st.download_button(
-                label="📄 Download PDF Report",
-                data=pdf_bytes,
-                file_name=(
-                    "TrendSense_Report.pdf"
-                ),
+                "📄 Download PDF",
+                pdf_data,
+                file_name="trendsense_report.pdf",
                 mime="application/pdf",
-                use_container_width=True
+                width="stretch",
             )
 
+        else:
 
-    csv_bytes = (
-        report_df
-        .to_csv(
-            index=False
-        )
-        .encode("utf-8")
-    )
-
-
-    st.download_button(
-        label="⬇️ Download Analyzed CSV",
-        data=csv_bytes,
-        file_name=(
-            "TrendSense_Analyzed_Data.csv"
-        ),
-        mime="text/csv",
-        use_container_width=True
-    )
-
-
-    render_html(
-        """
-        <div class="info-box">
-
-            <b>💡 Sponsor-ready workflow</b><br><br>
-
-            Upload a real historical social-media dataset,
-            let TrendSense automatically detect the platform
-            and standardize the columns, then generate
-            AI-powered sentiment, emotion, topic,
-            hashtag, trend and business insights.
-
-        </div>
-        """
-    )
+            st.warning(
+                "PDF generation unavailable."
+            )
 
 
 # ============================================================
 # FOOTER
 # ============================================================
 
-render_html(
-    """
-    <div class="footer">
+st.divider()
 
-        TrendSense AI • Social Intelligence Platform
+st.markdown(
+    """
+    <div style="
+        text-align:center;
+        padding:20px;
+        color:#8b8fa3;
+        font-size:12px;
+    ">
+        <b>TrendSense AI</b> •
+        AI-powered social intelligence platform
         <br>
-        Built for AI-powered trend discovery,
-        analytics and decision intelligence.
-
+        CSV + Live YouTube • NLP • Sentiment • Emotion
+        • Topics • Trends • Business Insights
     </div>
-    """
+    """,
+    unsafe_allow_html=True,
 )
