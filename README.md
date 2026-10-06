@@ -1,170 +1,115 @@
-# 🚀 TrendSense AI
+# 🔥 TrendSense AI
 
-### AI-Powered Social Media Sentiment, Emotion, Topic & Trend Analysis
+### AI-Powered Social Intelligence & Trend Analytics Platform
 
-TrendSense AI is an NLP-powered analytics dashboard that analyzes social media content to understand **sentiment, emotions, trending topics, engagement patterns, and overall audience behavior**.
+TrendSense AI is an AI-powered social intelligence platform that analyzes social media content to identify **sentiment, emotions, topics, languages, hashtags, engagement patterns, and emerging trends**.
 
-Built as an AI & Data Science project using Python, NLP, Machine Learning, and Streamlit.
+It supports both **CSV datasets and live YouTube data**, transforming raw social media content into meaningful visual insights and business intelligence.
 
----
+## 🚀 Live Demo
 
-## ✨ Features
+👉 https://trendsense-ai.streamlit.app/
 
-* 📊 **Sentiment Analysis** — Classifies posts as Positive, Neutral, or Negative
-* 💭 **Emotion Detection** — Detects emotions such as Joy, Sadness, Anger, Fear, Love, and Surprise
-* 🔥 **Topic Modeling** — Identifies major discussion themes using LDA
-* 📈 **Trend & Engagement Analysis** — Analyzes likes, shares, and engagement
-* 🔎 **Post Explorer** — Search and inspect individual social media posts
-* 📄 **Automated Reports** — Export analysis as CSV, Excel, and PDF
-* 🧪 **Model Performance** — Accuracy, Precision, Recall, F1/F2 scores, confusion matrices, and classification reports
-* 🎨 **Interactive Dashboard** — Built with Streamlit and Plotly
+## 📂 GitHub Repository
+
+👉 https://github.com/shaikhkhushi02-svg/TrendSense-AI
 
 ---
 
-## 🧠 NLP & Machine Learning
+## ✨ Key Features
 
-### Sentiment Analysis
+### 📥 Data Collection
+- Upload and analyze CSV datasets
+- Collect live YouTube data using the YouTube Data API
+- Handle social media text and engagement metrics
 
-* Dataset: TweetEval Sentiment
-* TF-IDF Vectorization
-* Logistic Regression
-* N-grams: Unigrams + Bigrams
-* Classes: Positive, Neutral, Negative
+### 🔍 Platform Intelligence
+- Identify the source platform
+- Analyze platform-specific content
+- Explore engagement patterns
 
-### Emotion Detection
+### 💭 Sentiment Analysis
+- Classifies content into:
+  - Positive
+  - Negative
+  - Neutral
+- Uses TF-IDF and Logistic Regression
+- Sentiment model accuracy: **~88.45%**
 
-* Dataset: dair-ai Emotion
-* TF-IDF Vectorization
-* Logistic Regression
-* Six emotion classes
+### ❤️ Emotion Analysis
+Identifies emotions expressed in social media content, including:
 
-### Topic Modeling
+- Joy
+- Anger
+- Sadness
+- Fear
+- Surprise
+- Love
+- Neutral
 
-* Latent Dirichlet Allocation (LDA)
-* Count Vectorization
-* Automatic topic assignment
+### 🧠 Topic Analysis
+- Identifies major discussion topics
+- Groups similar content
+- Helps discover what users are talking about
+
+### 🌐 Language Detection
+Detects multiple languages from social media text, including:
+
+- English
+- Hindi
+- Marathi
+- Gujarati
+- Bengali
+- Tamil
+- Telugu
+- Kannada
+- Malayalam
+- Punjabi
+- Urdu
+- French
+- German
+- Spanish
+- Japanese
+- Korean
+- Chinese
+- Arabic
+
+### #️⃣ Hashtag Analysis
+- Extracts hashtags
+- Identifies popular hashtags
+- Helps discover trending conversations
+
+### 🔥 Trend Analysis
+- Tracks content activity
+- Analyzes engagement
+- Identifies emerging trends
+- Visualizes trends over time
+
+### 💼 Business Insights
+Converts social-media analysis into actionable insights for:
+
+- Marketing
+- Brand monitoring
+- Customer understanding
+- Product analysis
+- Campaign analysis
+- Trend discovery
 
 ---
 
-## 🛠️ Tech Stack
-
-**Programming:**
-Python
-
-**Data & ML:**
-Pandas • NumPy • Scikit-learn • Joblib
-
-**NLP:**
-NLTK • TF-IDF • LDA
-
-**Visualization:**
-Plotly • Matplotlib • WordCloud
-
-**Dashboard:**
-Streamlit
-
-**Deployment:**
-Streamlit Community Cloud
-
----
-
-## 📂 Project Structure
+## 🔄 Intelligence Pipeline
 
 ```text
-TrendSense-AI/
-│
-├── data/
-│   ├── social_media.csv
-│   ├── sentiment_train.csv
-│   ├── sentiment_test.csv
-│   ├── emotion_train.csv
-│   ├── emotion_test.csv
-│   └── topic_analyzed_social_media.csv
-│
-├── app.py
-├── nlp_utils.py
-├── train_model.py
-├── topic_model.py
-├── emotion_model.py
-│
-├── sentiment_model.pkl
-├── tfidf_vectorizer.pkl
-├── topic_model.pkl
-├── topic_vectorizer.pkl
-├── emotion_model.pkl
-├── emotion_vectorizer.pkl
-│
-├── requirements.txt
-└── .gitignore
-```
-
----
-
-## ⚙️ Run Locally
-
-Clone the repository:
-
-```bash
-git clone https://github.com/shaikhkhushi02-svg/TrendSense-AI.git
-cd TrendSense-AI
-```
-
-Create a virtual environment:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the application:
-
-```bash
-streamlit run app.py
-```
-
----
-
-## 🎯 Use Cases
-
-TrendSense AI can be used for:
-
-* 📱 Social media monitoring
-* 📢 Brand sentiment tracking
-* 📈 Trend discovery
-* 🛍️ Customer feedback analysis
-* 🎯 Marketing research
-* 🧑‍💻 NLP experimentation
-* 📊 Audience behavior analysis
-
----
-
-## 🔮 Future Improvements
-
-* Real-time social media API integration
-* Transformer-based models such as BERT/RoBERTa
-* Real-time trend detection
-* Advanced topic clustering
-* Multilingual sentiment analysis
-* Brand monitoring
-* Automated business insights
-* Cloud-based scalable architecture
-
----
-
-## 👩‍💻 Developer
-
-**Khushi Zehra Shaikh**
-
-AI & Data Science Student | Aspiring Data Engineer
-
-Interested in Artificial Intelligence, Data Engineering, NLP, Machine Learning, and building real-world AI applications.
-
----
-
-⭐ If you find this project interesting, consider starring the repository!
+📥 Data
+   ↓
+🔍 Platform
+   ↓
+💭 Sentiment
+   ↓
+❤️ Emotion
+   ↓
+🧠 Topics
+   ↓
+🔥 Trends
+   ↓
+💼 Business Insights
