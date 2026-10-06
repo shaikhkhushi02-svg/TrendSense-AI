@@ -9,3 +9,5 @@ matplotlib
 joblib
 openpyxl
 reportlab
+langdetect
+deep-translator

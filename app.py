@@ -16,6 +16,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 
+from langdetect import detect, DetectorFactory
+
+DetectorFactory.seed = 0
+
 warnings.filterwarnings("ignore")
 
 
@@ -38,30 +42,39 @@ st.set_page_config(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 
-DATA_PATH = os.path.join(DATA_DIR, "social_media.csv")
+DATA_PATH = os.path.join(
+    DATA_DIR,
+    "social_media.csv"
+)
 
 SENTIMENT_MODEL_PATH = os.path.join(
-    BASE_DIR, "sentiment_model.pkl"
+    BASE_DIR,
+    "sentiment_model.pkl"
 )
 
 TFIDF_PATH = os.path.join(
-    BASE_DIR, "tfidf_vectorizer.pkl"
+    BASE_DIR,
+    "tfidf_vectorizer.pkl"
 )
 
 TOPIC_MODEL_PATH = os.path.join(
-    BASE_DIR, "topic_model.pkl"
+    BASE_DIR,
+    "topic_model.pkl"
 )
 
 TOPIC_VECTORIZER_PATH = os.path.join(
-    BASE_DIR, "topic_vectorizer.pkl"
+    BASE_DIR,
+    "topic_vectorizer.pkl"
 )
 
 EMOTION_MODEL_PATH = os.path.join(
-    BASE_DIR, "emotion_model.pkl"
+    BASE_DIR,
+    "emotion_model.pkl"
 )
 
 EMOTION_VECTORIZER_PATH = os.path.join(
-    BASE_DIR, "emotion_vectorizer.pkl"
+    BASE_DIR,
+    "emotion_vectorizer.pkl"
 )
 
 
@@ -86,6 +99,7 @@ SENTIMENT_ORDER = [
     "Neutral",
     "Positive",
 ]
+
 
 EMOTION_LABELS = {
     0: "Sadness",
@@ -117,6 +131,7 @@ EMOTION_ORDER = [
     "Surprise",
 ]
 
+
 TOPIC_NAMES = {
     1: "AI Automation & Productivity",
     2: "ChatGPT, Coding & Education",
@@ -129,14 +144,21 @@ TOPIC_NAMES = {
 # ============================================================
 
 def render_html(content):
+
     try:
         st.html(content)
+
     except Exception:
-        st.markdown(content, unsafe_allow_html=True)
+        st.markdown(
+            content,
+            unsafe_allow_html=True
+        )
 
 
 def compact_number(value):
+
     try:
+
         value = float(value)
 
         if value >= 1_000_000_000:
@@ -155,19 +177,27 @@ def compact_number(value):
 
 
 def normalize_label(value):
+
     if pd.isna(value):
         return ""
 
-    value = str(value).strip().lower()
-
-    return value
+    return str(value).strip().lower()
 
 
 def parse_metric(value):
+
     if pd.isna(value):
         return 0
 
-    if isinstance(value, (int, float, np.integer, np.floating)):
+    if isinstance(
+        value,
+        (
+            int,
+            float,
+            np.integer,
+            np.floating
+        )
+    ):
         return float(value)
 
     value = str(value).strip().upper()
@@ -178,14 +208,17 @@ def parse_metric(value):
     multiplier = 1
 
     if value.endswith("K"):
+
         multiplier = 1_000
         value = value[:-1]
 
     elif value.endswith("M"):
+
         multiplier = 1_000_000
         value = value[:-1]
 
     elif value.endswith("B"):
+
         multiplier = 1_000_000_000
         value = value[:-1]
 
@@ -199,6 +232,7 @@ def parse_metric(value):
 
 
 def extract_hashtags(text):
+
     if pd.isna(text):
         return ""
 
@@ -213,6 +247,7 @@ def extract_hashtags(text):
 
 
 def clean_fallback(text):
+
     if pd.isna(text):
         return ""
 
@@ -246,10 +281,110 @@ def clean_fallback(text):
 
 
 def clean_text(text):
-    return clean_fallback(text)
+
+    if pd.isna(text):
+        return ""
+
+    text = str(text)
+
+    text = re.sub(
+        r"http\S+|www\S+",
+        " ",
+        text
+    )
+
+    text = re.sub(
+        r"@\w+",
+        " ",
+        text
+    )
+
+    text = re.sub(
+        r"#",
+        "",
+        text
+    )
+
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
+
+    return text.strip()
 
 
-def kpi_card(title, value, subtitle=""):
+# ============================================================
+# LANGUAGE DETECTION
+# ============================================================
+
+def detect_language(text):
+
+    """
+    Detect the language of social media text.
+    Returns a readable language name.
+    """
+
+    if pd.isna(text):
+        return "Unknown"
+
+    text = str(text).strip()
+
+    if len(text) < 3:
+        return "Unknown"
+
+    try:
+
+        language_code = detect(text)
+
+        language_map = {
+
+            "en": "English",
+            "hi": "Hindi",
+            "mr": "Marathi",
+            "gu": "Gujarati",
+            "bn": "Bengali",
+            "ta": "Tamil",
+            "te": "Telugu",
+            "kn": "Kannada",
+            "ml": "Malayalam",
+            "pa": "Punjabi",
+            "ur": "Urdu",
+
+            "fr": "French",
+            "de": "German",
+            "es": "Spanish",
+            "it": "Italian",
+            "pt": "Portuguese",
+            "ru": "Russian",
+
+            "ja": "Japanese",
+            "ko": "Korean",
+            "zh-cn": "Chinese",
+            "zh-tw": "Chinese",
+            "ar": "Arabic",
+        }
+
+        return language_map.get(
+            language_code,
+            "Other"
+        )
+
+    except Exception:
+
+        return "Unknown"
+
+
+# ============================================================
+# KPI CARD
+# ============================================================
+
+def kpi_card(
+    title,
+    value,
+    subtitle=""
+):
+
     return f"""
     <div style="
         background:linear-gradient(135deg,#ffffff,#f7f5ff);
@@ -259,6 +394,7 @@ def kpi_card(title, value, subtitle=""):
         box-shadow:0 8px 25px rgba(79,70,229,.07);
         min-height:125px;
     ">
+
         <div style="
             font-size:13px;
             color:#6b7280;
@@ -283,6 +419,7 @@ def kpi_card(title, value, subtitle=""):
         ">
             {html.escape(str(subtitle))}
         </div>
+
     </div>
     """
 
@@ -292,6 +429,7 @@ def kpi_card(title, value, subtitle=""):
 # ============================================================
 
 def detect_platform(df):
+
     columns = {
         str(c).lower()
         for c in df.columns
@@ -301,45 +439,53 @@ def detect_platform(df):
         "video_id",
         "channel_title",
     } & columns:
+
         return "YouTube"
 
     if {
         "channel_id",
         "video_views",
     } & columns:
+
         return "YouTube"
 
     if {
         "shortcode",
         "owner_username",
     } & columns:
+
         return "Instagram"
 
     if {
         "save_count",
         "media_id",
     } & columns:
+
         return "Instagram"
 
     if {
         "tweet_id",
         "retweet_count",
     } & columns:
+
         return "Twitter/X"
 
     if {
         "favorite_count",
         "user_followers",
     } & columns:
+
         return "Twitter/X"
 
     if {
         "subreddit",
         "upvote_ratio",
     } & columns:
+
         return "Reddit"
 
     if "reddit_id" in columns:
+
         return "Reddit"
 
     return "Unknown"
@@ -349,15 +495,23 @@ def detect_platform(df):
 # COLUMN DETECTION
 # ============================================================
 
-def detect_column(df, candidates):
+def detect_column(
+    df,
+    candidates
+):
+
     lookup = {
         str(column).strip().lower(): column
         for column in df.columns
     }
 
     for candidate in candidates:
+
         if candidate.lower() in lookup:
-            return lookup[candidate.lower()]
+
+            return lookup[
+                candidate.lower()
+            ]
 
     return None
 
@@ -376,6 +530,7 @@ TEXT_COLUMNS = [
     "title",
 ]
 
+
 LIKE_COLUMNS = [
     "likes",
     "like",
@@ -388,6 +543,7 @@ LIKE_COLUMNS = [
     "total_likes",
 ]
 
+
 COMMENT_COLUMNS = [
     "comments",
     "comment_count",
@@ -396,6 +552,7 @@ COMMENT_COLUMNS = [
     "replies",
     "reply_count",
 ]
+
 
 SHARE_COLUMNS = [
     "shares",
@@ -407,6 +564,7 @@ SHARE_COLUMNS = [
     "repost_count",
 ]
 
+
 VIEW_COLUMNS = [
     "views",
     "view_count",
@@ -416,6 +574,7 @@ VIEW_COLUMNS = [
     "plays",
     "impressions",
 ]
+
 
 DATE_COLUMNS = [
     "date",
@@ -429,6 +588,7 @@ DATE_COLUMNS = [
     "posted_at",
 ]
 
+
 FOLLOWER_COLUMNS = [
     "author_followers",
     "followers",
@@ -438,10 +598,12 @@ FOLLOWER_COLUMNS = [
     "subscriber_count",
 ]
 
+
 LANGUAGE_COLUMNS = [
     "language",
     "lang",
 ]
+
 
 URL_COLUMNS = [
     "source_url",
@@ -449,6 +611,7 @@ URL_COLUMNS = [
     "link",
     "permalink",
 ]
+
 
 TYPE_COLUMNS = [
     "post_type",
@@ -465,6 +628,10 @@ TYPE_COLUMNS = [
 def standardize_social_data(df):
 
     df = df.copy()
+
+    # --------------------------------------------------------
+    # DETECT COLUMNS
+    # --------------------------------------------------------
 
     text_col = detect_column(
         df,
@@ -516,10 +683,25 @@ def standardize_social_data(df):
         TYPE_COLUMNS
     )
 
+    # --------------------------------------------------------
+    # TEXT
+    # --------------------------------------------------------
+
     if text_col:
-        df["text"] = df[text_col].fillna("").astype(str)
+
+        df["text"] = (
+            df[text_col]
+            .fillna("")
+            .astype(str)
+        )
+
     else:
+
         df["text"] = ""
+
+    # --------------------------------------------------------
+    # PLATFORM
+    # --------------------------------------------------------
 
     if "platform" not in df.columns:
 
@@ -533,6 +715,10 @@ def standardize_social_data(df):
             .astype(str)
         )
 
+    # --------------------------------------------------------
+    # POST ID
+    # --------------------------------------------------------
+
     if "post_id" not in df.columns:
 
         df["post_id"] = np.arange(
@@ -540,14 +726,25 @@ def standardize_social_data(df):
             len(df) + 1
         )
 
+    # --------------------------------------------------------
+    # POST TYPE
+    # --------------------------------------------------------
+
     if type_col:
+
         df["post_type"] = (
             df[type_col]
             .fillna("post")
             .astype(str)
         )
+
     else:
+
         df["post_type"] = "post"
+
+    # --------------------------------------------------------
+    # DATE
+    # --------------------------------------------------------
 
     if date_col:
 
@@ -560,56 +757,106 @@ def standardize_social_data(df):
 
         df["date"] = pd.NaT
 
+    # --------------------------------------------------------
+    # LIKES
+    # --------------------------------------------------------
+
     if likes_col:
-        df["likes"] = df[likes_col].apply(parse_metric)
+
+        df["likes"] = (
+            df[likes_col]
+            .apply(parse_metric)
+        )
+
     else:
+
         df["likes"] = 0
 
+    # --------------------------------------------------------
+    # COMMENTS
+    # --------------------------------------------------------
+
     if comments_col:
-        df["comments"] = df[comments_col].apply(parse_metric)
+
+        df["comments"] = (
+            df[comments_col]
+            .apply(parse_metric)
+        )
+
     else:
+
         df["comments"] = 0
 
+    # --------------------------------------------------------
+    # SHARES
+    # --------------------------------------------------------
+
     if shares_col:
-        df["shares"] = df[shares_col].apply(parse_metric)
+
+        df["shares"] = (
+            df[shares_col]
+            .apply(parse_metric)
+        )
+
     else:
+
         df["shares"] = 0
 
+    # --------------------------------------------------------
+    # VIEWS
+    # --------------------------------------------------------
+
     if views_col:
-        df["views"] = df[views_col].apply(parse_metric)
+
+        df["views"] = (
+            df[views_col]
+            .apply(parse_metric)
+        )
+
     else:
+
         df["views"] = 0
 
+    # --------------------------------------------------------
+    # FOLLOWERS
+    # --------------------------------------------------------
+
     if follower_col:
+
         df["author_followers"] = (
             df[follower_col]
             .apply(parse_metric)
         )
+
     else:
+
         df["author_followers"] = 0
 
-    if language_col:
-        df["language"] = (
-            df[language_col]
-            .fillna("Unknown")
-            .astype(str)
-        )
-    else:
-        df["language"] = "Unknown"
+    # --------------------------------------------------------
+    # SOURCE URL
+    # --------------------------------------------------------
 
     if url_col:
+
         df["source_url"] = (
             df[url_col]
             .fillna("")
             .astype(str)
         )
+
     else:
+
         df["source_url"] = ""
+
+    # --------------------------------------------------------
+    # HASHTAGS
+    # --------------------------------------------------------
 
     if "hashtags" not in df.columns:
 
-        df["hashtags"] = df["text"].apply(
-            extract_hashtags
+        df["hashtags"] = (
+            df["text"]
+            .apply(extract_hashtags)
         )
 
     else:
@@ -620,9 +867,56 @@ def standardize_social_data(df):
             .astype(str)
         )
 
-    df["clean_text"] = df["text"].apply(
-        clean_text
+    # --------------------------------------------------------
+    # CLEAN TEXT
+    # --------------------------------------------------------
+
+    df["clean_text"] = (
+        df["text"]
+        .apply(clean_text)
     )
+
+    # --------------------------------------------------------
+    # LANGUAGE DETECTION
+    # --------------------------------------------------------
+
+    if language_col:
+
+        df["language"] = (
+            df[language_col]
+            .fillna("")
+            .astype(str)
+        )
+
+        df["language"] = df.apply(
+            lambda row:
+            row["language"]
+            if (
+                row["language"].strip()
+                and row["language"].lower()
+                not in [
+                    "unknown",
+                    "nan",
+                    "none",
+                    ""
+                ]
+            )
+            else detect_language(
+                row["clean_text"]
+            ),
+            axis=1
+        )
+
+    else:
+
+        df["language"] = (
+            df["clean_text"]
+            .apply(detect_language)
+        )
+
+    # --------------------------------------------------------
+    # ENGAGEMENT
+    # --------------------------------------------------------
 
     df["engagement"] = (
         df["likes"]
@@ -630,9 +924,16 @@ def standardize_social_data(df):
         + df["shares"]
     )
 
-    denominator = df["views"].replace(
-        0,
-        np.nan
+    # --------------------------------------------------------
+    # ENGAGEMENT RATE
+    # --------------------------------------------------------
+
+    denominator = (
+        df["views"]
+        .replace(
+            0,
+            np.nan
+        )
     )
 
     df["engagement_rate"] = (
@@ -662,68 +963,88 @@ def load_models():
 
     sentiment_model = None
     vectorizer = None
+
     topic_model = None
     topic_vectorizer = None
+
     emotion_model = None
     emotion_vectorizer = None
 
     try:
+
         if os.path.exists(
             SENTIMENT_MODEL_PATH
         ):
+
             sentiment_model = joblib.load(
                 SENTIMENT_MODEL_PATH
             )
+
     except Exception:
         pass
 
     try:
+
         if os.path.exists(
             TFIDF_PATH
         ):
+
             vectorizer = joblib.load(
                 TFIDF_PATH
             )
+
     except Exception:
         pass
 
     try:
+
         if os.path.exists(
             TOPIC_MODEL_PATH
         ):
+
             topic_model = joblib.load(
                 TOPIC_MODEL_PATH
             )
+
     except Exception:
         pass
 
     try:
+
         if os.path.exists(
             TOPIC_VECTORIZER_PATH
         ):
+
             topic_vectorizer = joblib.load(
                 TOPIC_VECTORIZER_PATH
             )
+
     except Exception:
         pass
 
     try:
+
         if os.path.exists(
             EMOTION_MODEL_PATH
         ):
+
             emotion_model = joblib.load(
                 EMOTION_MODEL_PATH
             )
+
     except Exception:
         pass
 
     try:
+
         if os.path.exists(
             EMOTION_VECTORIZER_PATH
         ):
+
             emotion_vectorizer = joblib.load(
                 EMOTION_VECTORIZER_PATH
             )
+
     except Exception:
         pass
 
@@ -764,13 +1085,21 @@ def run_ai_analysis(df):
     # SENTIMENT
     # --------------------------------------------------------
 
-    if sentiment_model is not None and vectorizer is not None:
+    if (
+        sentiment_model is not None
+        and vectorizer is not None
+    ):
 
         try:
 
-            X = vectorizer.transform(texts)
+            X = vectorizer.transform(
+                texts
+            )
 
-            predictions = sentiment_model.predict(X)
+            predictions = (
+                sentiment_model
+                .predict(X)
+            )
 
             df["sentiment"] = [
                 SENTIMENT_LABELS.get(
@@ -844,7 +1173,9 @@ def run_ai_analysis(df):
 
                 probabilities = (
                     emotion_model
-                    .predict_proba(X_emotion)
+                    .predict_proba(
+                        X_emotion
+                    )
                 )
 
                 df["emotion_confidence"] = (
@@ -889,10 +1220,12 @@ def run_ai_analysis(df):
             df["topic_id"] = predictions
 
             df["topic"] = [
+
                 TOPIC_NAMES.get(
                     int(value),
                     f"Topic {value}"
                 )
+
                 for value in predictions
             ]
 
@@ -903,7 +1236,9 @@ def run_ai_analysis(df):
 
                 probabilities = (
                     topic_model
-                    .predict_proba(X_topic)
+                    .predict_proba(
+                        X_topic
+                    )
                 )
 
                 df["topic_confidence"] = (
@@ -954,10 +1289,16 @@ def run_ai_analysis(df):
         + sentiment_bonus * 0.10
     )
 
-    if raw_score.max() > raw_score.min():
+    if (
+        raw_score.max()
+        > raw_score.min()
+    ):
 
         df["trend_score_normalized"] = (
-            (raw_score - raw_score.min())
+            (
+                raw_score
+                - raw_score.min()
+            )
             /
             (
                 raw_score.max()
@@ -990,11 +1331,13 @@ YOUTUBE_BASE_URL = (
 def get_youtube_api_key():
 
     try:
+
         return st.secrets[
             "YOUTUBE_API_KEY"
         ]
 
     except Exception:
+
         return ""
 
 
@@ -1029,7 +1372,9 @@ def youtube_request(
                 .decode("utf-8")
             )
 
-            error_json = json.loads(body)
+            error_json = json.loads(
+                body
+            )
 
             message = (
                 error_json
@@ -1043,8 +1388,14 @@ def youtube_request(
             reason = (
                 error_json
                 .get("error", {})
-                .get("errors", [{}])[0]
-                .get("reason", "")
+                .get(
+                    "errors",
+                    [{}]
+                )[0]
+                .get(
+                    "reason",
+                    ""
+                )
             )
 
             if reason:
@@ -1053,7 +1404,9 @@ def youtube_request(
                     f"{message} ({reason})"
                 )
 
-            raise RuntimeError(message)
+            raise RuntimeError(
+                message
+            )
 
         except json.JSONDecodeError:
 
@@ -1094,12 +1447,18 @@ def collect_youtube_data(
 
     max_videos = max(
         1,
-        min(int(max_videos), 20)
+        min(
+            int(max_videos),
+            20
+        )
     )
 
     comments_per_video = max(
         0,
-        min(int(comments_per_video), 20)
+        min(
+            int(comments_per_video),
+            20
+        )
     )
 
     # --------------------------------------------------------
@@ -1212,45 +1571,59 @@ def collect_youtube_data(
         ).strip()
 
         rows.append({
+
             "post_id": video_id,
+
             "platform": "YouTube",
+
             "post_type": "video",
+
             "text": text,
+
             "date": snippet.get(
                 "publishedAt",
                 ""
             ),
+
             "likes": parse_metric(
                 statistics.get(
                     "likeCount",
                     0
                 )
             ),
+
             "comments": parse_metric(
                 statistics.get(
                     "commentCount",
                     0
                 )
             ),
+
             "shares": 0,
+
             "views": parse_metric(
                 statistics.get(
                     "viewCount",
                     0
                 )
             ),
+
             "hashtags": extract_hashtags(
                 text
             ),
+
             "author": snippet.get(
                 "channelTitle",
                 ""
             ),
+
             "author_followers": 0,
+
             "language": snippet.get(
                 "defaultLanguage",
                 "Unknown"
             ),
+
             "source_url": (
                 "https://www.youtube.com/watch?v="
                 + video_id
@@ -1282,12 +1655,16 @@ def collect_youtube_data(
 
         except RuntimeError as error:
 
-            error_text = str(error).lower()
+            error_text = (
+                str(error)
+                .lower()
+            )
 
             if (
                 "disabled" in error_text
                 or "forbidden" in error_text
-                or "commentsdisabled" in error_text
+                or "commentsdisabled"
+                in error_text
             ):
 
                 continue
@@ -1301,7 +1678,10 @@ def collect_youtube_data(
 
             comment = (
                 item
-                .get("snippet", {})
+                .get(
+                    "snippet",
+                    {}
+                )
                 .get(
                     "topLevelComment",
                     {}
@@ -1327,39 +1707,55 @@ def collect_youtube_data(
                 continue
 
             rows.append({
+
                 "post_id": comment_id,
+
                 "platform": "YouTube",
+
                 "post_type": "comment",
+
                 "text": comment_text,
+
                 "date": snippet.get(
                     "publishedAt",
                     ""
                 ),
+
                 "likes": parse_metric(
                     snippet.get(
                         "likeCount",
                         0
                     )
                 ),
+
                 "comments": 0,
+
                 "shares": 0,
+
                 "views": 0,
+
                 "hashtags": extract_hashtags(
                     comment_text
                 ),
+
                 "author": snippet.get(
                     "authorDisplayName",
                     ""
                 ),
+
                 "author_followers": 0,
+
                 "language": "Unknown",
+
                 "source_url": (
                     "https://www.youtube.com/watch?v="
                     + video_id
                 ),
             })
 
-    result = pd.DataFrame(rows)
+    result = pd.DataFrame(
+        rows
+    )
 
     if result.empty:
 
@@ -1373,64 +1769,110 @@ def collect_youtube_data(
 # ============================================================
 # EXCEL REPORT
 # ============================================================
-def create_excel_report(report_df):
+
+def create_excel_report(
+    report_df
+):
+
     output = io.BytesIO()
 
     if report_df is None:
+
         report_df = pd.DataFrame()
 
     report_df = report_df.copy()
 
-    if report_df.empty and len(report_df.columns) == 0:
+    if (
+        report_df.empty
+        and len(report_df.columns) == 0
+    ):
+
         report_df = pd.DataFrame({
-            "Message": ["No report data available."]
+            "Message": [
+                "No report data available."
+            ]
         })
 
-    # ---------------------------------------------------------
-    # EXCEL FIX:
-    # Convert ALL timezone-aware datetime values to plain text
-    # ---------------------------------------------------------
+    # --------------------------------------------------------
+    # CONVERT DATETIME VALUES
+    # --------------------------------------------------------
+
     for column in report_df.columns:
 
         def excel_safe_value(value):
-            try:
-                # Pandas Timestamp
-                if isinstance(value, pd.Timestamp):
-                    return value.strftime("%Y-%m-%d %H:%M:%S")
 
-                # Python datetime/date/time objects
-                if hasattr(value, "tzinfo"):
-                    if value.tzinfo is not None:
-                        return value.replace(tzinfo=None).strftime(
-                            "%Y-%m-%d %H:%M:%S"
+            try:
+
+                if isinstance(
+                    value,
+                    pd.Timestamp
+                ):
+
+                    return value.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+
+                if hasattr(
+                    value,
+                    "tzinfo"
+                ):
+
+                    if (
+                        value.tzinfo
+                        is not None
+                    ):
+
+                        return (
+                            value
+                            .replace(
+                                tzinfo=None
+                            )
+                            .strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            )
                         )
 
                 return value
 
             except Exception:
+
                 return str(value)
 
-        report_df[column] = report_df[column].map(excel_safe_value)
+        report_df[column] = (
+            report_df[column]
+            .map(excel_safe_value)
+        )
 
-    # ---------------------------------------------------------
-    # FINAL SAFETY:
-    # Convert date/time columns explicitly to strings
-    # ---------------------------------------------------------
+    # --------------------------------------------------------
+    # FINAL DATE SAFETY
+    # --------------------------------------------------------
+
     for column in report_df.columns:
-        column_name = str(column).lower()
 
-        if any(word in column_name for word in [
-            "date",
-            "time",
-            "timestamp",
-            "created",
-            "published"
-        ]):
-            report_df[column] = report_df[column].astype(str)
+        column_name = str(
+            column
+        ).lower()
 
-    # ---------------------------------------------------------
+        if any(
+            word in column_name
+            for word in [
+                "date",
+                "time",
+                "timestamp",
+                "created",
+                "published"
+            ]
+        ):
+
+            report_df[column] = (
+                report_df[column]
+                .astype(str)
+            )
+
+    # --------------------------------------------------------
     # CREATE EXCEL
-    # ---------------------------------------------------------
+    # --------------------------------------------------------
+
     with pd.ExcelWriter(
         output,
         engine="openpyxl"
@@ -1446,6 +1888,7 @@ def create_excel_report(report_df):
 
     return output.getvalue()
 
+
 # ============================================================
 # PDF REPORT
 # ============================================================
@@ -1455,6 +1898,7 @@ def create_pdf_report(df):
     try:
 
         from reportlab.lib.pagesizes import A4
+
         from reportlab.platypus import (
             SimpleDocTemplate,
             Paragraph,
@@ -1462,8 +1906,12 @@ def create_pdf_report(df):
             Table,
             TableStyle,
         )
+
         from reportlab.lib import colors
-        from reportlab.lib.styles import getSampleStyleSheet
+
+        from reportlab.lib.styles import (
+            getSampleStyleSheet
+        )
 
     except Exception:
 
@@ -1488,7 +1936,10 @@ def create_pdf_report(df):
     )
 
     story.append(
-        Spacer(1, 15)
+        Spacer(
+            1,
+            15
+        )
     )
 
     story.append(
@@ -1499,7 +1950,10 @@ def create_pdf_report(df):
     )
 
     story.append(
-        Spacer(1, 10)
+        Spacer(
+            1,
+            10
+        )
     )
 
     if "sentiment" in df.columns:
@@ -1510,7 +1964,10 @@ def create_pdf_report(df):
         )
 
         table_data = [
-            ["Sentiment", "Records"]
+            [
+                "Sentiment",
+                "Records"
+            ]
         ]
 
         for label in SENTIMENT_ORDER:
@@ -1553,9 +2010,13 @@ def create_pdf_report(df):
             ])
         )
 
-        story.append(table)
+        story.append(
+            table
+        )
 
-    document.build(story)
+    document.build(
+        story
+    )
 
     output.seek(0)
 
@@ -1566,13 +2027,20 @@ def create_pdf_report(df):
 # SESSION STATE
 # ============================================================
 
-if "youtube_live_df" not in st.session_state:
+if (
+    "youtube_live_df"
+    not in st.session_state
+):
 
     st.session_state[
         "youtube_live_df"
     ] = None
 
-if "youtube_query" not in st.session_state:
+
+if (
+    "youtube_query"
+    not in st.session_state
+):
 
     st.session_state[
         "youtube_query"
@@ -1587,44 +2055,69 @@ render_html("""
 <style>
 
 .stApp {
+
     background:
         radial-gradient(
             circle at 10% 0%,
             rgba(139,92,246,.08),
             transparent 30%
         ),
+
         radial-gradient(
             circle at 90% 10%,
             rgba(59,130,246,.07),
             transparent 28%
         ),
+
         #f8f9fc;
 }
 
 section[data-testid="stSidebar"] {
+
     background: #ffffff;
-    border-right: 1px solid #ececf3;
+
+    border-right:
+        1px solid #ececf3;
 }
 
-h1, h2, h3 {
-    letter-spacing: -0.03em;
+h1,
+h2,
+h3 {
+
+    letter-spacing:
+        -0.03em;
 }
 
 div[data-testid="stMetric"] {
+
     background: white;
-    border: 1px solid #ececf3;
-    border-radius: 16px;
-    padding: 14px;
+
+    border:
+        1px solid #ececf3;
+
+    border-radius:
+        16px;
+
+    padding:
+        14px;
 }
 
 .stButton > button {
-    border-radius: 12px;
-    font-weight: 700;
+
+    border-radius:
+        12px;
+
+    font-weight:
+        700;
 }
 
 .stDownloadButton > button {
-    border-radius: 12px;
-    font-weight: 700;
+
+    border-radius:
+        12px;
+
+    font-weight:
+        700;
 }
 
 </style>
@@ -1695,15 +2188,21 @@ with st.sidebar:
         )
 
         region_map = {
+
             "India": "IN",
+
             "United States": "US",
+
             "United Kingdom": "GB",
+
             "Global": "GLOBAL",
         }
 
-        youtube_region_code = region_map[
-            youtube_region
-        ]
+        youtube_region_code = (
+            region_map[
+                youtube_region
+            ]
+        )
 
         youtube_video_count = st.slider(
             "📊 Number of videos",
@@ -1726,7 +2225,9 @@ with st.sidebar:
 
         if collect_button:
 
-            api_key = get_youtube_api_key()
+            api_key = (
+                get_youtube_api_key()
+            )
 
             if not api_key:
 
@@ -1743,14 +2244,20 @@ with st.sidebar:
                         "🔴 Collecting current YouTube data..."
                     ):
 
-                        live_df = collect_youtube_data(
-                            api_key=api_key,
-                            query=youtube_query,
-                            region_code=youtube_region_code,
-                            max_videos=youtube_video_count,
-                            comments_per_video=(
-                                youtube_comments_per_video
-                            ),
+                        live_df = (
+                            collect_youtube_data(
+                                api_key=api_key,
+                                query=youtube_query,
+                                region_code=(
+                                    youtube_region_code
+                                ),
+                                max_videos=(
+                                    youtube_video_count
+                                ),
+                                comments_per_video=(
+                                    youtube_comments_per_video
+                                ),
+                            )
                         )
 
                     st.session_state[
@@ -1827,13 +2334,17 @@ if source == "🔴 Live YouTube":
 
         st.stop()
 
-    raw_df = st.session_state[
-        "youtube_live_df"
-    ].copy()
+    raw_df = (
+        st.session_state[
+            "youtube_live_df"
+        ].copy()
+    )
 
-    query_name = st.session_state.get(
-        "youtube_query",
-        "YouTube"
+    query_name = (
+        st.session_state.get(
+            "youtube_query",
+            "YouTube"
+        )
     )
 
     filename = "live_youtube.csv"
@@ -1873,7 +2384,9 @@ else:
 
     filename = "social_media.csv"
 
-    data_source_label = "Demo Dataset"
+    data_source_label = (
+        "Demo Dataset"
+    )
 
 
 # ============================================================
@@ -1899,6 +2412,7 @@ with st.spinner(
 
 filtered_df = df.copy()
 
+
 if search_text:
 
     mask = (
@@ -1910,27 +2424,58 @@ if search_text:
         )
     )
 
-    filtered_df = filtered_df[
-        mask
-    ]
+    filtered_df = (
+        filtered_df[mask]
+    )
+
 
 if sentiment_filter:
 
-    filtered_df = filtered_df[
-        filtered_df["sentiment"]
-        .isin(sentiment_filter)
-    ]
+    filtered_df = (
+        filtered_df[
+            filtered_df[
+                "sentiment"
+            ].isin(
+                sentiment_filter
+            )
+        ]
+    )
+
 
 if emotion_filter:
 
-    filtered_df = filtered_df[
-        filtered_df["emotion"]
-        .isin(emotion_filter)
-    ]
+    filtered_df = (
+        filtered_df[
+            filtered_df[
+                "emotion"
+            ].isin(
+                emotion_filter
+            )
+        ]
+    )
 
-filtered_df = filtered_df[
-    filtered_df["likes"]
-    >= minimum_likes
+
+filtered_df = (
+    filtered_df[
+        filtered_df["likes"]
+        >= minimum_likes
+    ]
+)
+
+
+# ============================================================
+# LANGUAGE SUMMARY
+# ============================================================
+
+language_counts = (
+    filtered_df["language"]
+    .value_counts()
+    .reset_index()
+)
+
+language_counts.columns = [
+    "Language",
+    "Count"
 ]
 
 
@@ -1938,7 +2483,8 @@ filtered_df = filtered_df[
 # HERO
 # ============================================================
 
-render_html(f"""
+render_html(
+    f"""
 <div style="
     background:
         linear-gradient(
@@ -1947,10 +2493,18 @@ render_html(f"""
             #f5f3ff 45%,
             #eef6ff 100%
         );
-    border:1px solid #e8e5f5;
-    border-radius:26px;
-    padding:34px;
-    margin-bottom:25px;
+
+    border:
+        1px solid #e8e5f5;
+
+    border-radius:
+        26px;
+
+    padding:
+        34px;
+
+    margin-bottom:
+        25px;
 ">
 
     <div style="
@@ -1989,67 +2543,58 @@ render_html(f"""
         font-size:13px;
         color:#6b7280;
     ">
-        📂 Source: <b>{html.escape(data_source_label)}</b>
+
+        📂 Source:
+        <b>
+            {html.escape(data_source_label)}
+        </b>
+
         &nbsp;&nbsp;•&nbsp;&nbsp;
+
         🧠 NLP analyzed
+
         &nbsp;&nbsp;•&nbsp;&nbsp;
+
         📊 Business-ready insights
+
     </div>
 
 </div>
-""")
+"""
+)
 
 
 # ============================================================
 # PIPELINE
 # ============================================================
+# ============================================================
+# TRENDsense INTELLIGENCE PIPELINE
+# ============================================================
+# ============================================================
+# TRENDSENSE INTELLIGENCE PIPELINE
+# ============================================================
+# ============================================================
+# TRENDSENSE INTELLIGENCE PIPELINE
+# ============================================================
 
-st.markdown(
-    "### 🔄 TrendSense Intelligence Pipeline"
-)
+st.subheader("🔄 TrendSense Intelligence Pipeline")
 
-pipeline_cols = st.columns(7)
-
-pipeline_steps = [
+pipeline = [
     ("📥", "Data"),
     ("🔍", "Platform"),
     ("💭", "Sentiment"),
     ("❤️", "Emotion"),
     ("🧠", "Topics"),
     ("🔥", "Trends"),
-    ("💼", "Insights"),
+    ("💼", "Business Insights"),
 ]
 
-for col, (icon, label) in zip(
-    pipeline_cols,
-    pipeline_steps
-):
+cols = st.columns(7)
 
+for col, (icon, label) in zip(cols, pipeline):
     with col:
-
-        st.markdown(
-            f"""
-            <div style="
-                background:white;
-                border:1px solid #ececf3;
-                border-radius:14px;
-                padding:13px 8px;
-                text-align:center;
-                font-size:12px;
-                font-weight:700;
-            ">
-                <div style="font-size:20px;">
-                    {icon}
-                </div>
-                {label}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-st.divider()
-
+        st.markdown(f"### {icon}")
+        st.caption(label)
 
 # ============================================================
 # DATA STATUS
@@ -2069,38 +2614,49 @@ st.caption(
 # KPI
 # ============================================================
 
-total_records = len(filtered_df)
+total_records = len(
+    filtered_df
+)
 
 total_likes = (
-    filtered_df["likes"].sum()
+    filtered_df["likes"]
+    .sum()
 )
 
 total_comments = (
-    filtered_df["comments"].sum()
+    filtered_df["comments"]
+    .sum()
 )
 
 total_views = (
-    filtered_df["views"].sum()
+    filtered_df["views"]
+    .sum()
 )
 
 avg_engagement = (
-    filtered_df["engagement"].mean()
+    filtered_df["engagement"]
+    .mean()
     if len(filtered_df)
     else 0
 )
 
 positive_percentage = (
+
     (
         filtered_df["sentiment"]
         .eq("Positive")
         .mean()
         * 100
     )
+
     if len(filtered_df)
+
     else 0
 )
 
+
 kpis = st.columns(5)
+
 
 with kpis[0]:
 
@@ -2114,6 +2670,7 @@ with kpis[0]:
         )
     )
 
+
 with kpis[1]:
 
     render_html(
@@ -2125,6 +2682,7 @@ with kpis[1]:
             "Total likes"
         )
     )
+
 
 with kpis[2]:
 
@@ -2138,6 +2696,7 @@ with kpis[2]:
         )
     )
 
+
 with kpis[3]:
 
     render_html(
@@ -2149,6 +2708,7 @@ with kpis[3]:
             "Total views"
         )
     )
+
 
 with kpis[4]:
 
@@ -2169,14 +2729,23 @@ st.markdown("")
 # ============================================================
 
 tabs = st.tabs([
+
     "📊 Overview",
+
     "💭 Sentiment & Emotion",
+
     "🔥 Topics & Trends",
+
     "🌐 Platform Comparison",
+
     "💼 Business Insights",
+
     "🧪 Model Performance",
+
     "🔎 Post Explorer",
+
     "📄 Reports",
+
 ])
 
 
@@ -2190,7 +2759,12 @@ with tabs[0]:
         "Social Intelligence Overview"
     )
 
+    # --------------------------------------------------------
+    # SENTIMENT + EMOTION
+    # --------------------------------------------------------
+
     col1, col2 = st.columns(2)
+
 
     with col1:
 
@@ -2227,6 +2801,7 @@ with tabs[0]:
             width="stretch"
         )
 
+
     with col2:
 
         emotion_counts = (
@@ -2262,14 +2837,23 @@ with tabs[0]:
             width="stretch"
         )
 
+
+    # --------------------------------------------------------
+    # ACTIVITY OVER TIME
+    # --------------------------------------------------------
+
     if (
         "date" in filtered_df.columns
-        and filtered_df["date"].notna().any()
+        and filtered_df[
+            "date"
+        ].notna().any()
     ):
 
         daily = (
             filtered_df
-            .dropna(subset=["date"])
+            .dropna(
+                subset=["date"]
+            )
             .assign(
                 day=lambda x:
                 x["date"].dt.date
@@ -2300,6 +2884,41 @@ with tabs[0]:
         )
 
 
+    # --------------------------------------------------------
+    # LANGUAGE DISTRIBUTION
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### 🌐 Language Distribution"
+    )
+
+    if not language_counts.empty:
+
+        fig = px.bar(
+            language_counts,
+            x="Language",
+            y="Count",
+            text="Count",
+            title="Detected Languages"
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            height=380
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+    else:
+
+        st.info(
+            "No language data available."
+        )
+
+
 # ============================================================
 # TAB 2 — SENTIMENT & EMOTION
 # ============================================================
@@ -2311,6 +2930,7 @@ with tabs[1]:
     )
 
     c1, c2 = st.columns(2)
+
 
     with c1:
 
@@ -2346,6 +2966,7 @@ with tabs[1]:
             width="stretch"
         )
 
+
     with c2:
 
         emotion = (
@@ -2380,6 +3001,7 @@ with tabs[1]:
             width="stretch"
         )
 
+
     st.markdown(
         "### Sentiment by Platform"
     )
@@ -2387,7 +3009,10 @@ with tabs[1]:
     platform_sentiment = (
         filtered_df
         .groupby(
-            ["platform", "sentiment"]
+            [
+                "platform",
+                "sentiment"
+            ]
         )
         .size()
         .reset_index(
@@ -2457,6 +3082,7 @@ with tabs[2]:
         width="stretch"
     )
 
+
     st.markdown(
         "### 🔥 Trending Posts"
     )
@@ -2472,28 +3098,42 @@ with tabs[2]:
     )
 
     display_cols = [
+
         "platform",
+
         "post_type",
+
         "text",
+
         "sentiment",
+
         "emotion",
+
         "topic",
+
         "trend_score",
+
         "likes",
+
         "comments",
+
         "views",
     ]
 
     display_cols = [
-        col for col in display_cols
+        col
+        for col in display_cols
         if col in trending.columns
     ]
 
     st.dataframe(
-        trending[display_cols],
+        trending[
+            display_cols
+        ],
         width="stretch",
         hide_index=True,
     )
+
 
     # --------------------------------------------------------
     # HASHTAGS
@@ -2522,6 +3162,7 @@ with tabs[2]:
                 continue
 
             if not tag.startswith("#"):
+
                 tag = "#" + tag
 
             all_hashtags.append(
@@ -2531,7 +3172,9 @@ with tabs[2]:
     if all_hashtags:
 
         hashtag_counts = (
-            pd.Series(all_hashtags)
+            pd.Series(
+                all_hashtags
+            )
             .value_counts()
             .head(20)
             .reset_index()
@@ -2581,11 +3224,31 @@ with tabs[3]:
         filtered_df
         .groupby("platform")
         .agg(
-            Posts=("post_id", "count"),
-            Likes=("likes", "sum"),
-            Comments=("comments", "sum"),
-            Shares=("shares", "sum"),
-            Views=("views", "sum"),
+            Posts=(
+                "post_id",
+                "count"
+            ),
+
+            Likes=(
+                "likes",
+                "sum"
+            ),
+
+            Comments=(
+                "comments",
+                "sum"
+            ),
+
+            Shares=(
+                "shares",
+                "sum"
+            ),
+
+            Views=(
+                "views",
+                "sum"
+            ),
+
             Avg_Engagement=(
                 "engagement",
                 "mean"
@@ -2599,6 +3262,7 @@ with tabs[3]:
         width="stretch",
         hide_index=True,
     )
+
 
     if not platform_summary.empty:
 
@@ -2619,6 +3283,7 @@ with tabs[3]:
             fig,
             width="stretch"
         )
+
 
         fig = px.bar(
             platform_summary,
@@ -2661,39 +3326,49 @@ with tabs[4]:
         )
 
         dominant_sentiment = (
-            filtered_df["sentiment"]
+            filtered_df[
+                "sentiment"
+            ]
             .value_counts()
             .idxmax()
         )
 
         dominant_emotion = (
-            filtered_df["emotion"]
+            filtered_df[
+                "emotion"
+            ]
             .value_counts()
             .idxmax()
         )
 
         dominant_topic = (
-            filtered_df["topic"]
+            filtered_df[
+                "topic"
+            ]
             .value_counts()
             .idxmax()
         )
 
         insights = [
+
             (
                 "🔥 Top Trend",
                 f"The strongest trending content "
                 f"belongs to: {dominant_topic}."
             ),
+
             (
                 "💭 Audience Sentiment",
                 f"The dominant audience sentiment "
                 f"is {dominant_sentiment}."
             ),
+
             (
                 "❤️ Audience Emotion",
                 f"The dominant detected emotion "
                 f"is {dominant_emotion}."
             ),
+
             (
                 "📈 Best Content",
                 f"The highest trend-score content "
@@ -2701,6 +3376,7 @@ with tabs[4]:
                 f"{top_post['trend_score']:.1f}."
             ),
         ]
+
 
         for title, message in insights:
 
@@ -2713,17 +3389,23 @@ with tabs[4]:
                     padding:18px;
                     margin-bottom:12px;
                 ">
+
                     <b>{title}</b>
+
                     <div style="
                         margin-top:7px;
                         color:#596273;
                     ">
+
                         {html.escape(message)}
+
                     </div>
+
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+
 
         st.markdown(
             "### 🎯 Recommended Business Actions"
@@ -2752,21 +3434,26 @@ with tabs[4]:
                 "neutral audiences toward engagement."
             )
 
+
         actions.extend([
+
             (
                 f"Prioritize the topic "
                 f"'{dominant_topic}' "
                 "for future content."
             ),
+
             (
                 "Monitor rapidly increasing "
                 "engagement to identify emerging trends."
             ),
+
             (
                 "Compare platforms before allocating "
                 "marketing resources."
             ),
         ])
+
 
         for action in actions:
 
@@ -2798,13 +3485,17 @@ with tabs[5]:
 
     c1, c2, c3 = st.columns(3)
 
+
     with c1:
 
         avg_sentiment_confidence = (
+
             filtered_df[
                 "sentiment_confidence"
             ].mean()
+
             if len(filtered_df)
+
             else 0
         )
 
@@ -2813,13 +3504,17 @@ with tabs[5]:
             f"{avg_sentiment_confidence * 100:.1f}%"
         )
 
+
     with c2:
 
         avg_emotion_confidence = (
+
             filtered_df[
                 "emotion_confidence"
             ].mean()
+
             if len(filtered_df)
+
             else 0
         )
 
@@ -2828,13 +3523,17 @@ with tabs[5]:
             f"{avg_emotion_confidence * 100:.1f}%"
         )
 
+
     with c3:
 
         avg_topic_confidence = (
+
             filtered_df[
                 "topic_confidence"
             ].mean()
+
             if len(filtered_df)
+
             else 0
         )
 
@@ -2843,18 +3542,25 @@ with tabs[5]:
             f"{avg_topic_confidence * 100:.1f}%"
         )
 
+
     confidence_df = pd.DataFrame({
+
         "Model": [
             "Sentiment",
             "Emotion",
             "Topic",
         ],
+
         "Confidence": [
+
             avg_sentiment_confidence * 100,
+
             avg_emotion_confidence * 100,
+
             avg_topic_confidence * 100,
         ],
     })
+
 
     fig = px.bar(
         confidence_df,
@@ -2890,25 +3596,42 @@ with tabs[6]:
     )
 
     explorer_cols = [
+
         "post_id",
+
         "platform",
+
         "post_type",
+
         "text",
+
         "sentiment",
+
         "emotion",
+
         "topic",
+
         "trend_score",
+
         "likes",
+
         "comments",
+
         "shares",
+
         "views",
+
         "author",
+
         "source_url",
     ]
 
     explorer_cols = [
+
         col
+
         for col in explorer_cols
+
         if col in filtered_df.columns
     ]
 
@@ -2932,42 +3655,71 @@ with tabs[7]:
     )
 
     report_cols = [
+
         "post_id",
+
         "platform",
+
         "post_type",
+
         "text",
+
         "date",
+
+        "language",
+
         "likes",
+
         "comments",
+
         "shares",
+
         "views",
+
         "sentiment",
+
         "sentiment_confidence",
+
         "emotion",
+
         "emotion_confidence",
+
         "topic",
+
         "topic_confidence",
+
         "trend_score",
+
         "source_url",
     ]
 
     report_cols = [
+
         col
+
         for col in report_cols
+
         if col in filtered_df.columns
     ]
 
-    report_df = filtered_df[
-        report_cols
-    ].copy()
+    report_df = (
+        filtered_df[
+            report_cols
+        ].copy()
+    )
 
     c1, c2, c3 = st.columns(3)
 
+
     with c1:
 
-        csv_data = report_df.to_csv(
-            index=False
-        ).encode("utf-8")
+        csv_data = (
+            report_df
+            .to_csv(
+                index=False
+            )
+            .encode("utf-8")
+        )
 
         st.download_button(
             "⬇️ Download CSV",
@@ -2977,10 +3729,13 @@ with tabs[7]:
             width="stretch",
         )
 
+
     with c2:
 
-        excel_data = create_excel_report(
-            report_df
+        excel_data = (
+            create_excel_report(
+                report_df
+            )
         )
 
         st.download_button(
@@ -2994,10 +3749,13 @@ with tabs[7]:
             width="stretch",
         )
 
+
     with c3:
 
-        pdf_data = create_pdf_report(
-            report_df
+        pdf_data = (
+            create_pdf_report(
+                report_df
+            )
         )
 
         if pdf_data:
@@ -3031,11 +3789,16 @@ st.markdown(
         color:#8b8fa3;
         font-size:12px;
     ">
+
         <b>TrendSense AI</b> •
+
         AI-powered social intelligence platform
+
         <br>
-        CSV + Live YouTube • NLP • Sentiment • Emotion
-        • Topics • Trends • Business Insights
+
+        CSV + Live YouTube • NLP • Sentiment •
+        Emotion • Topics • Trends • Business Insights
+
     </div>
     """,
     unsafe_allow_html=True,
